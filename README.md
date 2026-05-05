@@ -1,60 +1,88 @@
-# PredictPlast AI
+# InjexCore
 
-Plataforma de mantenimiento predictivo para inyectoras de plástico.
+**AI-powered predictive maintenance for plastic injection machines**
 
-## Descripción
+---
 
-PredictPlast AI es un proyecto centrado en el desarrollo de un sistema capaz de analizar datos de inyectoras de plástico para detectar anomalías, anticipar posibles fallos y ayudar a optimizar el mantenimiento industrial.
+## Project Overview
 
-El objetivo inicial es construir un MVP sencillo pero funcional utilizando datos simulados, modelos básicos de detección de anomalías y una visualización clara del estado de la máquina.
+InjexCore is an early-stage project focused on building a predictive maintenance system for plastic injection machines.
 
-## Problema que resuelve
+The goal is to analyze machine data, detect anomalous behavior, and anticipate potential failures before they occur—helping reduce downtime, production defects, and operational costs.
 
-Las empresas que utilizan inyectoras de plástico sufren pérdidas por:
+This project follows a practical, incremental approach: starting with simulated data and evolving into a functional, real-world applicable system.
 
-* Paradas inesperadas
-* Scrap y defectos de producción
-* Costes energéticos elevados
-* Mantenimiento reactivo
+---
 
-PredictPlast AI busca detectar comportamientos anómalos antes de que se conviertan en un fallo real.
+## 3-Month MVP Objective
 
-## Objetivo a 3 meses
+The initial goal is to build a **simple but functional system** that:
 
-Desarrollar un sistema básico que:
+* Works with simulated injection machine data
+* Detects anomalous behavior
+* Outputs a clear machine state (Normal / Warning / Anomaly)
+* Provides visual insights into machine performance over time
+* Can be presented as a solid technical portfolio project
 
-* Genere o utilice datos simulados de una inyectora
-* Detecte anomalías simples
-* Muestre el estado de la máquina
-* Incluya una visualización clara
-* Sea enseñable como proyecto de portfolio
+---
 
-## Resultado visible esperado
+## Problem Statement
 
-"Tengo un pequeño sistema que analiza datos de una inyectora y detecta anomalías antes de que se produzca un fallo."
+Companies operating plastic injection machines often face:
 
-## Stack tecnológico inicial
+* Unexpected machine downtime
+* Production defects (scrap)
+* High energy consumption
+* Inefficient or reactive maintenance strategies
 
-* Python
-* Pandas
-* NumPy
-* Matplotlib
-* Scikit-learn
-* Jupyter Notebook
-* Git
-* GitHub
+InjexCore aims to shift from **reactive to predictive maintenance** by identifying abnormal patterns early.
 
-## Estructura inicial del proyecto
+---
+
+## Current Progress
+
+### Completed
+
+* Project structure and repository setup
+* Synthetic dataset generation
+* Simulation of industrial variables:
+
+  * Temperature
+  * Pressure
+  * Cycle time
+* Initial data visualization:
+
+  * Realistic machine behavior over time
+  * Detection of visible anomalous patterns
+
+### In Progress
+
+* Data preprocessing and normalization
+* Definition of anomaly criteria
+
+### Next Steps
+
+* Implement anomaly detection model
+* Define machine states (Normal / Warning / Anomaly)
+* Build clear output system
+* Improve visualizations (dashboard-style)
+
+---
+
+## Project Structure
 
 ```text
-PredictPlast-AI/
+InjexCore/
 ├── data/
 │   ├── raw/
+│   │   └──dataset_pro.cvs
 │   └── processed/
 │
 ├── images/
 │
 ├── notebooks/
+│   ├── comprobacion_dataset.py
+│   └── eda.ipynb
 │
 ├── src/
 │   ├── data_generation.py
@@ -67,42 +95,106 @@ PredictPlast-AI/
 └── .gitignore
 ```
 
-## Roadmap inicial
+---
 
-### Mes 1
+## Dataset Description
 
-* Comprender el problema
-* Definir variables
-* Crear dataset simulado
-* Explorar y limpiar datos
+The current system uses **synthetic data** to simulate the behavior of a plastic injection machine.
 
-### Mes 2
+### Variables:
 
-* Implementar modelo de anomalías
-* Generar outputs entendibles
-* Crear visualizaciones
+* Material Temperature
+* Mold Temperature
+* Injecction Pressure
+* Manteinance Pressure
+* Cavity Pressure
+* Injection Velocity
+* Screw Position
+* Injection Time
+* Cooling Time
+* Cycle Time
+* Cycle count
+* Specific Volume
+* Machine stops
+* Energy consumption
 
-### Mes 3
+### Data Characteristics:
 
-* Mejorar robustez
-* Preparar demo
-* Documentar el proyecto
-* Dejarlo listo para portfolio
+* Normal operating patterns are simulated
+* Controlled anomalies are introduced manually
+* Time-series behavior allows pattern recognition
 
-## Variables iniciales de la inyectora
+This approach enables rapid experimentation before integrating real industrial data.
 
-* Temperatura
-* Presión
-* Tiempo de ciclo
-* Número de ciclos
-* Paradas
-* Consumo energético
+---
 
-## Próximos pasos
+## Tech Stack
 
-1. Crear la estructura de carpetas
-2. Hacer el primer commit
-3. Generar el primer dataset simulado
-4. Crear las primeras gráficas
-5. Empezar el modelo de detección de anomalías
-6. 
+* Python
+* Pandas
+* NumPy
+* Matplotlib
+* Seaborn
+* Scikit-learn
+* Jupyter Notebook
+* Git & GitHub
+
+---
+
+## Roadmap
+
+### Month 1 — Data & Understanding
+
+* Define machine variables
+* Generate synthetic dataset
+* Explore and clean data
+* Identify patterns
+
+### Month 2 — First Functional System
+
+* Implement anomaly detection model
+* Generate interpretable outputs
+* Build initial visualizations
+
+### Month 3 — Consolidation
+
+* Improve robustness
+* Reduce false positives
+* Prepare demo
+* Finalize documentation
+
+---
+
+## Expected Outcome
+
+> "A small system capable of analyzing injection machine data and detecting anomalies before failures occur."
+
+---
+
+## Long-Term Vision
+
+InjexCore aims to evolve into a **real predictive maintenance platform** for industrial environments, with:
+
+* Real-time data integration
+* Advanced machine learning models
+* Scalable architecture (SaaS)
+* Industrial deployment capabilities
+
+---
+
+## Status
+
+Work in progress — early-stage MVP
+
+---
+
+## Contributing
+
+This is currently a personal project. Contributions may be opened in later stages.
+
+---
+
+## Contact
+
+Created by Lluís Sagué
+Feel free to connect or reach out for collaboration or feedback.
