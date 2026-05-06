@@ -1,4 +1,5 @@
-# InjexCore
+<img width="2644" height="1288" alt="LOGO_ESLOGAN" src="https://github.com/user-attachments/assets/ddd9e719-f237-44ba-8026-fc236bce2421" />
+
 
 **AI-powered predictive maintenance for plastic injection machines**
 
