@@ -20,4 +20,14 @@ Thumbs.db
 
 # Data files opcionales
 data/raw/*.csv
+data/raw/*.xlsx
 data/processed/*.csv
+data/features/*.csv
+data/features/*.json
+data/features/*.md
+data/features/*.parquet
+
+# Claude Code — local-only private context (never publish)
+.claude/CLAUDE.local.md
+.claude/MEMORY.md
+.claude/USER.md
