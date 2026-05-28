@@ -1,0 +1,101 @@
+# InjexCore — Data cleaning policy
+#
+# All thresholds and per-variable bounds. Tune here, never in code.
+# Loaded by src/data/cleaning/policy.py via pydantic-settings.
+
+# ---------------------------------------------------------------------------
+# Module #3 — timestamps
+# ---------------------------------------------------------------------------
+timestamps:
+  expected_period_s: 60.0
+  gap_factor: 2.0              # delta > gap_factor * expected_period → gap
+  max_legal_jump_s: 3600.0     # > 1h forward jump → DST/TZ flag
+
+# ---------------------------------------------------------------------------
+# Module #2 — duplicates
+# ---------------------------------------------------------------------------
+duplicates:
+  payload_window_rows: 5       # identical-payload check window
+  burst_max_delta_s: 1.0       # ≥3 rows within this delta → PLC burst
+  burst_min_rows: 3
+
+# ---------------------------------------------------------------------------
+# Module #4 — frozen sensors
+# ---------------------------------------------------------------------------
+frozen_sensors:
+  frozen_min_minutes: 120      # default min run to flag (in samples at 1-min cadence)
+  epsilon_rate_cols:           # columns that use |Δ| < eps instead of exact equality
+    - granulator_production_rate
+    - steam_valve_flow_me2
+  epsilon: 1.0e-6
+  skip_columns:                # whitelist: SCADA registers may be constant by design
+    - granulator_g2_state_pct
+    - conditioner_l2_state_pct
+    - feeder_al2_state_pct
+    - steam_dosing_valve_me2_pct
+
+# ---------------------------------------------------------------------------
+# Module #1 — missing values
+# ---------------------------------------------------------------------------
+missing_values:
+  broken_sensor_min_run: 30          # NaN run > 30 samples while running → critical
+  interpolation_max_run: 5           # lost_communication: interpolate runs ≤ 5
+  alarm_alignment_window_min: 10     # maintenance window alignment tolerance
+  missing_by_design_columns:
+    - batch_id
+    - batch_quality_id
+
+# ---------------------------------------------------------------------------
+# Module #5 — physical ranges
+# ---------------------------------------------------------------------------
+physical_ranges:
+  clip_soft_violations: false        # if false, mask 'important' violations to NaN
+  bounds:
+    # Temperatures (°C)
+    conditioner_inlet_temp:     { min: -20.0, max: 350.0, severity: critical }
+    steam_valve_temp_me2:       { min: -20.0, max: 350.0, severity: critical }
+    feeder_hopper_temp:         { min: -20.0, max: 350.0, severity: critical }
+    conditioner_steam_loop_temp: { min: -20.0, max: 350.0, severity: critical }
+    expander_ex2_outlet_temp:   { min: -20.0, max: 350.0, severity: critical }
+    inlet_hopper_temp:          { min: -20.0, max: 350.0, severity: critical }
+    conditioner_temp_sp:        { min: -20.0, max: 350.0, severity: critical }
+    # Pressures (bar)
+    steam_valve_pressure_me2:   { min: 0.0,   max: 100.0, severity: critical }
+    expander_ex2_hydraulic_press: { min: 0.0,  max: 250.0, severity: critical }
+    steam_line_pressure_sp:     { min: 0.0,   max: 100.0, severity: critical }
+    expander_cone_pressure_sp:  { min: 0.0,   max: 100.0, severity: critical }
+    # Power / percent registers
+    granulator_power:           { min: 0.0,   max: 110.0, severity: important }
+    conditioner_l2_power:       { min: 0.0,   max: 110.0, severity: important }
+    expander_ex2_power:         { min: 0.0,   max: 110.0, severity: important }
+    feeder_max_speed_sp:        { min: 0.0,   max: 110.0, severity: important }
+    granulator_power_sp:        { min: 0.0,   max: 110.0, severity: important }
+    granulator_g2_state_pct:    { min: 0.0,   max: 110.0, severity: important }
+    conditioner_l2_state_pct:   { min: 0.0,   max: 110.0, severity: important }
+    feeder_al2_state_pct:       { min: 0.0,   max: 110.0, severity: important }
+    steam_dosing_valve_me2_pct: { min: 0.0,   max: 110.0, severity: important }
+    # Humidity / rate / energy / mechanical
+    inlet_hopper_humidity:      { min: 0.0,   max: 100.0, severity: critical }
+    granulator_production_rate: { min: 0.0,   max: 10000.0, severity: critical }
+    steam_valve_flow_me2:       { min: 0.0,   max: 100000.0, severity: critical }
+    extruder_specific_energy:   { min: 0.0,   max: 10000.0, severity: critical }
+    granulator_roller_gap:      { min: 0.0,   max: 50.0, severity: important }
+    inlet_hopper_points:        { min: 0.0,   max: 1.0e9, severity: aware }
+    # Binary state flags
+    granulator_g2_running:      { min: 0.0,   max: 1.0, severity: critical, integer: true }
+    granulator_g2_alarm:        { min: 0.0,   max: 1.0, severity: critical, integer: true }
+    conditioner_me2_alarm:      { min: 0.0,   max: 1.0, severity: critical, integer: true }
+    conditioner_me2_direct:     { min: 0.0,   max: 1.0, severity: critical, integer: true }
+    feeder_al2_running:         { min: 0.0,   max: 1.0, severity: critical, integer: true }
+    feeder_al2_alarm:           { min: 0.0,   max: 1.0, severity: critical, integer: true }
+
+# ---------------------------------------------------------------------------
+# Module #6 — state consistency
+# ---------------------------------------------------------------------------
+state_consistency:
+  min_production_kgmin: 0.1          # production_rate > this while machine off → flag
+  min_power_pct: 1.0                 # power < this while machine on → flag
+  alarm_shutdown_window_min: 10      # alarm=1 followed by running=0 within → expected
+  sp_pv_max_drift_pct: 20.0          # |SP-PV|/SP > this for > drift_min → saturation
+  sp_pv_drift_min_minutes: 30
+  hot_temperature_threshold_c: 200.0 # alarm=0 while any *_temp > this → flag

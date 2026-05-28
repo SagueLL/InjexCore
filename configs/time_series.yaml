@@ -1,0 +1,96 @@
+# InjexCore — Time-series engineering policy
+#
+# All thresholds and per-column overrides for the time-series engineering
+# pipeline. Tune here, never in code. Loaded by
+# src/data/time_series/policy.py via pydantic.
+
+# ---------------------------------------------------------------------------
+# Stage 1 — temporal conversion
+# ---------------------------------------------------------------------------
+temporal_conversion:
+  enabled: true
+  timestamp_col: timestamp
+
+# ---------------------------------------------------------------------------
+# Stage 2 — temporal index
+# ---------------------------------------------------------------------------
+temporal_index:
+  enabled: true
+  drop_duplicates_on_index: true
+
+# ---------------------------------------------------------------------------
+# Stage 3 — resampling (optional; cleaning already enforces a 60 s grid)
+# ---------------------------------------------------------------------------
+resampling:
+  enabled: false
+  rule: "1min"
+  aggregations:
+    process_sensor: mean
+    setpoint: last
+    state_flag: max
+    alarm: max
+    control: mean
+
+# ---------------------------------------------------------------------------
+# Stage 4b — specialised state / alarm features
+# ---------------------------------------------------------------------------
+state_features:
+  enabled: true
+  running_fraction_windows: [15, 60, 240]
+  time_since_active: true
+  edge_count_windows: [60, 240]
+
+# ---------------------------------------------------------------------------
+# Stage 4 + 5 — generic feature families per semantic category
+#
+# Windows and lags are in SAMPLES (predictable post-resampling).
+# `closed: left` keeps rolling windows leak-safe for a t-aligned target:
+# the window at index t sees [t-w, t), never t itself.
+# ---------------------------------------------------------------------------
+category_defaults:
+  process_sensor:
+    rolling_mean:  { enabled: true,  windows: [5, 15, 60], closed: left }
+    rolling_std:   { enabled: true,  windows: [5, 15, 60], closed: left }
+    rolling_trend: { enabled: true,  windows: [15, 60],    closed: left }
+    lag:           { enabled: true,  lags: [1, 5, 15] }
+    pct_change:    { enabled: true,  lags: [1, 5] }
+    velocity:      { enabled: true,  lags: [1] }
+  setpoint:
+    rolling_mean:  { enabled: false }
+    rolling_std:   { enabled: false }
+    rolling_trend: { enabled: false }
+    lag:           { enabled: true, lags: [1] }
+    pct_change:    { enabled: false }
+    velocity:      { enabled: false }
+  state_flag:
+    rolling_mean:  { enabled: false }
+    rolling_std:   { enabled: false }
+    rolling_trend: { enabled: false }
+    lag:           { enabled: true, lags: [1] }
+    pct_change:    { enabled: false }
+    velocity:      { enabled: false }
+  alarm:
+    rolling_mean:  { enabled: false }
+    rolling_std:   { enabled: false }
+    rolling_trend: { enabled: false }
+    lag:           { enabled: true, lags: [1] }
+    pct_change:    { enabled: false }
+    velocity:      { enabled: false }
+  control:
+    rolling_mean:  { enabled: true,  windows: [15, 60], closed: left }
+    rolling_std:   { enabled: false }
+    rolling_trend: { enabled: false }
+    lag:           { enabled: true,  lags: [1, 5] }
+    pct_change:    { enabled: false }
+    velocity:      { enabled: false }
+
+# ---------------------------------------------------------------------------
+# Per-column overrides — apply on top of the column's category defaults.
+# `windows` / `lags` (when set) replace the category values across every
+# enabled family. `disable_families` / `enable_families` toggle families.
+# ---------------------------------------------------------------------------
+overrides:
+  granulator_production_rate:
+    windows: [5, 15, 60, 240]
+  inlet_hopper_points:
+    disable_families: [pct_change, velocity]
