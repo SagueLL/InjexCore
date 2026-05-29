@@ -27,6 +27,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.data.cleaning.column_groups import ColumnGroups, load_groups  # noqa: E402
 from src.data.cleaning.policy import CleaningPolicy, load_policy  # noqa: E402
+from src.data.datasets.policy import (  # noqa: E402
+    SpecializedDatasetsPolicy,
+    load_policy as load_datasets_policy,
+)
+from src.data.feature_engineering.policy import (  # noqa: E402
+    FeatureEngineeringPolicy,
+    load_policy as load_fe_policy,
+)
 from src.data.time_series.policy import (  # noqa: E402
     TimeSeriesPolicy,
     load_policy as load_ts_policy,
@@ -54,6 +62,20 @@ def groups() -> ColumnGroups:
 def ts_policy() -> TimeSeriesPolicy:
     """Real time-series engineering policy loaded from configs/time_series.yaml."""
     return load_ts_policy(PROJECT_ROOT / "configs" / "time_series.yaml")
+
+
+@pytest.fixture(scope="session")
+def fe_policy() -> FeatureEngineeringPolicy:
+    """Real feature engineering policy loaded from configs/feature_engineering.yaml."""
+    return load_fe_policy(PROJECT_ROOT / "configs" / "feature_engineering.yaml")
+
+
+@pytest.fixture(scope="session")
+def datasets_policy() -> SpecializedDatasetsPolicy:
+    """Real specialized-datasets policy loaded from configs/specialized_datasets.yaml."""
+    return load_datasets_policy(
+        PROJECT_ROOT / "configs" / "specialized_datasets.yaml"
+    )
 
 
 _BASE_TS = pd.Timestamp("2025-01-01 00:00:00")

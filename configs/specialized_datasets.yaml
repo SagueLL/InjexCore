@@ -1,0 +1,146 @@
+# InjexCore — Specialized datasets policy
+#
+# Master-validation thresholds and the column selectors for each
+# downstream dataset. Tune here, never in code. Loaded by
+# src/data/datasets/policy.py via pydantic.
+#
+# Input: data/features/Dades_pellet_engineered.parquet (the feature-
+# engineering output). Outputs:
+#   - data/datasets/master/master_dataset.parquet (single source of truth)
+#   - data/datasets/specialized/anomaly_detection_dataset.parquet
+#   - data/datasets/specialized/forecasting_dataset.parquet
+#   - data/datasets/specialized/energy_dataset.parquet
+#
+# This stage performs SELECTION + VALIDATION ONLY. It never computes
+# new features (that belongs in src/data/feature_engineering/) and never
+# fits models (that belongs in src/models/).
+
+# ---------------------------------------------------------------------------
+# Master validation — promotes engineered.parquet to canonical master
+# ---------------------------------------------------------------------------
+master_validation:
+  enabled: true
+  require_monotonic_timestamps: true
+  require_unique_timestamps: true
+  # Per-column NaN tolerance. Rolling features at the head of the
+  # series carry warmup NaNs; the default budget is intentionally
+  # loose so warmup alone does not flag every long-window column.
+  max_nan_fraction_per_column: 0.30
+  # Compare against data/datasets/master/schema_lock.json if present;
+  # on first run the lock file is bootstrapped (next run will diff).
+  schema_lock: true
+  # Generation-only / leakage-prone columns dropped before promotion.
+  drop_columns:
+    - drift
+
+# ---------------------------------------------------------------------------
+# Anomaly-detection dataset — Isolation Forest, Autoencoders, DBSCAN
+#
+# Captures *local behavioural deviation*: rolling stability metrics,
+# derivatives, state evolution and statistical anomaly scores.
+# ---------------------------------------------------------------------------
+anomaly_detection:
+  enabled: true
+  include_metadata: true
+  include_patterns:
+    # Stability family (feature_engineering)
+    - "_cv_\\d+$"
+    - "_range_\\d+$"
+    - "_mad_\\d+$"
+    - "_stdratio_\\d+_\\d+$"
+    # Statistical anomaly family (feature_engineering)
+    - "_z_\\d+$"
+    - "_robust_z_\\d+$"
+    - "_z_global$"
+    # Temporal derivatives family (feature_engineering)
+    - "_accel_\\d+$"
+    - "_signchanges_\\d+$"
+    # State-evolution from time_series state_features
+    - "_tsla$"
+    - "_edges_\\d+$"
+  include_categories: []
+  include_columns:
+    # Operative features (feature_engineering) — cross-flag aggregations
+    - time_since_machine_off
+    - n_subsystems_running
+    - cumulative_starts
+    - time_since_any_alarm
+    - any_alarm_while_running
+  exclude_patterns: []
+  exclude_columns: []
+
+# ---------------------------------------------------------------------------
+# Forecasting dataset — LSTM, Transformers, XGBoost forecasting
+#
+# Captures *predictive temporal structure*: lags, percent changes,
+# rolling means / std / trend, runtime fractions. Raw process-sensor
+# signals are kept so they can be used as forecasting targets.
+# ---------------------------------------------------------------------------
+forecasting:
+  enabled: true
+  include_metadata: true
+  include_patterns:
+    # Temporal features (time_series)
+    - "_lag_\\d+$"
+    - "_pctchg_\\d+$"
+    - "_velocity_\\d+$"
+    # Rolling windows (time_series)
+    - "_mean_\\d+$"
+    - "_std_\\d+$"
+    - "_trend_\\d+$"
+    # State features useful as exogenous regressors
+    - "_runfrac_\\d+$"
+    # SP-PV deviations (feature_engineering) — drive future behaviour
+    - "_minus_"
+  include_categories:
+    # Raw process sensors are kept as forecasting targets.
+    - process_sensor
+  include_columns: []
+  exclude_patterns: []
+  exclude_columns: []
+
+# ---------------------------------------------------------------------------
+# Energy dataset — energetic optimisation & efficiency studies
+#
+# Captures power consumption, throughput, energy-per-kg ratios and the
+# operational context (running fractions) needed to interpret them.
+# ---------------------------------------------------------------------------
+energy:
+  enabled: true
+  include_metadata: true
+  include_patterns:
+    # Energetic features (feature_engineering)
+    - "_cumkwh$"
+    - "_cumkwh_day$"
+    - "_energy_per_kg_\\d+$"
+    # Physical ratios (feature_engineering) — explicit names, but
+    # grouped here by suffix family for resilience to additions.
+    - "_kwh_per_kg$"
+    - "^production_per_steam$"
+    - "^power_balance_"
+    - "^pressure_ratio_"
+    # Operational load context (state_features rolling runtime fraction)
+    - "_runfrac_\\d+$"
+  include_categories: []
+  include_columns:
+    # Raw energy & production signals
+    - granulator_power
+    - conditioner_l2_power
+    - expander_ex2_power
+    - extruder_specific_energy
+    - granulator_production_rate
+    # Setpoints / state percent registers — machine load context
+    - granulator_g2_state_pct
+    - conditioner_l2_state_pct
+    - feeder_al2_state_pct
+    # Auxiliary process signals that drive energy efficiency
+    - granulator_roller_gap
+    - steam_valve_flow_me2
+    - steam_valve_pressure_me2
+    - conditioner_steam_loop_temp
+    - conditioner_inlet_temp
+    - expander_ex2_outlet_temp
+    - inlet_hopper_humidity
+    - inlet_hopper_temp
+  exclude_patterns: []
+  exclude_columns: []

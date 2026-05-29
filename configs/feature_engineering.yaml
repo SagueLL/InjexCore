@@ -1,0 +1,177 @@
+# InjexCore — Feature engineering policy
+#
+# All thresholds, ratio definitions and per-column overrides for the
+# feature engineering pipeline. Tune here, never in code. Loaded by
+# src/data/feature_engineering/policy.py via pydantic.
+#
+# Inputs: data/features/Dades_pellet_features.parquet (the time-series
+# engineering output). Outputs: data/features/Dades_pellet_engineered.parquet
+# plus JSON/Markdown reports.
+#
+# Boundary with src/models/: fitted estimators (Isolation Forest, LOF,
+# Mahalanobis with a covariance fit) belong in src/models/anomaly/, NOT
+# here. This stage emits statistical scores only.
+
+# ---------------------------------------------------------------------------
+# Family 1 — temporal derivatives (acceleration, sign-change rate, SP–PV)
+# ---------------------------------------------------------------------------
+temporal_derivatives:
+  enabled: true
+  acceleration:
+    enabled: true
+    lags: [1, 5]
+    categories: [process_sensor]
+  sign_change_rate:
+    enabled: true
+    windows: [15, 60]
+    categories: [process_sensor]
+    closed: left
+  sp_pv_deviation:
+    enabled: true
+    # Explicit setpoint → process-variable pairs. No auto-pairing.
+    # feeder_max_speed_sp has no obvious PV in the current dictionary; omit.
+    pairs:
+      granulator_power_sp: granulator_power
+      conditioner_temp_sp: conditioner_steam_loop_temp
+      steam_line_pressure_sp: steam_valve_pressure_me2
+      expander_cone_pressure_sp: expander_ex2_hydraulic_press
+
+# ---------------------------------------------------------------------------
+# Family 2 — stability (CV, std-ratio, range, MAD)
+# ---------------------------------------------------------------------------
+stability:
+  enabled: true
+  cv:
+    enabled: true
+    windows: [15, 60]
+    categories: [process_sensor]
+    epsilon: 1.0e-6
+    closed: left
+  std_ratio:
+    enabled: true
+    short: 5
+    long: 60
+    categories: [process_sensor]
+    epsilon: 1.0e-6
+  rolling_range:
+    enabled: true
+    windows: [15, 60]
+    categories: [process_sensor]
+    closed: left
+  mad:
+    enabled: true
+    windows: [60]
+    categories: [process_sensor]
+    units: [C, bar]
+    closed: left
+
+# ---------------------------------------------------------------------------
+# Family 3 — physical ratios (cross-column, explicit list)
+#
+# `op: ratio` -> a / (b + eps_sign)        (default when omitted)
+# `op: diff`  -> a - b
+# ---------------------------------------------------------------------------
+physical_ratios:
+  enabled: true
+  epsilon: 1.0e-6
+  nan_rate_warn: 0.50
+  ratios:
+    - name: granulator_kwh_per_kg
+      op: ratio
+      a: granulator_power
+      b: granulator_production_rate
+    - name: extruder_kwh_per_kg
+      op: scale
+      a: extruder_specific_energy
+      factor: 0.001         # kWh/t -> kWh/kg
+    - name: production_per_steam
+      op: ratio
+      a: granulator_production_rate
+      b: steam_valve_flow_me2
+    - name: temp_rise_conditioner
+      op: diff
+      a: conditioner_steam_loop_temp
+      b: conditioner_inlet_temp
+    - name: temp_rise_feeder
+      op: diff
+      a: feeder_hopper_temp
+      b: inlet_hopper_temp
+    - name: power_balance_extruder_vs_conditioner
+      op: diff
+      a: expander_ex2_power
+      b: conditioner_l2_power
+    - name: pressure_ratio_expander_steam
+      op: ratio
+      a: expander_ex2_hydraulic_press
+      b: steam_valve_pressure_me2
+    - name: roller_gap_per_production
+      op: ratio
+      a: granulator_roller_gap
+      b: granulator_production_rate
+
+# ---------------------------------------------------------------------------
+# Family 4 — energetic features (cumulative kWh, per-window energy/kg)
+# ---------------------------------------------------------------------------
+energetic_features:
+  enabled: true
+  sample_period_s: 60.0      # match cleaning.timestamps.expected_period_s
+  power_columns: [granulator_power, conditioner_l2_power, expander_ex2_power]
+  production_column: granulator_production_rate
+  cumulative:
+    enabled: true
+    daily_reset: true
+  energy_per_kg:
+    enabled: true
+    windows: [60, 240]
+    epsilon: 1.0e-6
+    closed: left
+  per_cycle:
+    # Pellet extrusion is continuous; no cycle marker on the current dataset.
+    # Flip to true once a cycle_id column or a usable boundary signal exists.
+    enabled: false
+    cycle_id_column: null
+
+# ---------------------------------------------------------------------------
+# Family 5 — operative features (cross-flag aggregations)
+# ---------------------------------------------------------------------------
+operative_features:
+  enabled: true
+  running_flags: [granulator_g2_running, feeder_al2_running, conditioner_me2_direct]
+  alarm_flags: [granulator_g2_alarm, feeder_al2_alarm, conditioner_me2_alarm]
+  time_since_machine_off: true   # last 0→1 edge on OR(running_flags)
+  n_subsystems_running: true
+  cumulative_starts: true        # cumsum of rising edges on OR(running_flags)
+  total_alarms:
+    enabled: true
+    windows: [60, 240]
+    closed: left
+  time_since_any_alarm: true
+  any_alarm_while_running: true
+
+# ---------------------------------------------------------------------------
+# Family 6 — statistical anomaly features (univariate only)
+#
+# Multivariate / fitted models (Isolation Forest, LOF, Mahalanobis with a
+# fitted covariance) live in src/models/anomaly/. This stage emits no model
+# state, no pickled artifacts.
+# ---------------------------------------------------------------------------
+anomaly_features:
+  enabled: true
+  rolling_z:
+    enabled: true
+    windows: [60, 240]
+    categories: [process_sensor]
+    epsilon: 1.0e-6
+    closed: left
+  robust_z:
+    enabled: true
+    windows: [60]
+    categories: [process_sensor]
+    epsilon: 1.0e-6
+    closed: left
+  global_z:
+    # OFF by default: leaks future statistics into past rows. Acceptable
+    # for offline EDA only.
+    enabled: false
+    categories: [process_sensor]
+    epsilon: 1.0e-6
