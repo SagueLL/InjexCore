@@ -10,6 +10,7 @@ venv/
 
 # Jupyter
 .ipynb_checkpoints/
+/notebooks/
 
 # VS Code
 .vscode/
@@ -18,14 +19,8 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Data files opcionales
-data/raw/*.csv
-data/raw/*.xlsx
-data/processed/*.csv
-data/features/*.csv
-data/features/*.json
-data/features/*.md
-data/features/*.parquet
+# Data — private, never publish (raw, processed, features, datasets, reports)
+/data/
 
 # Claude Code — local-only private context (never publish)
 .claude/CLAUDE.local.md
