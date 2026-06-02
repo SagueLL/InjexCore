@@ -19,6 +19,10 @@ RAW_DATA_DIR: Path = DATA_DIR / "raw"
 PROCESSED_DATA_DIR: Path = DATA_DIR / "processed"
 FEATURES_DIR: Path = DATA_DIR / "features"
 DATASETS_DIR: Path = DATA_DIR / "datasets"
+# Intelligence Layer artifacts (behaviour baselines, profile labels, ...).
+# Sits past the preprocessing chain: fed by data/datasets/, consumed by the
+# future src/models/ predictive estimators.
+INTELLIGENCE_DIR: Path = DATA_DIR / "intelligence"
 
 CONFIGS_DIR: Path = PROJECT_ROOT / "configs"
 
@@ -29,5 +33,6 @@ __all__ = [
     "PROCESSED_DATA_DIR",
     "FEATURES_DIR",
     "DATASETS_DIR",
+    "INTELLIGENCE_DIR",
     "CONFIGS_DIR",
 ]

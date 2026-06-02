@@ -8,6 +8,7 @@ and operations.
 docs/
 ├── README.md          # this index
 ├── pipeline/          # technical reference for each pipeline stage (how it works)
+├── intelligence/      # Intelligence Layer reference docs (behaviour, anomaly, …)
 ├── project-state/     # versioned MASTER_VERSION snapshots (point-in-time truth)
 └── proposals/         # improvement proposals, RFCs, planning ahead of a version
 ```
@@ -27,6 +28,18 @@ datasets → modeling → serving`.
 
 > Future stages (anomaly modeling, forecasting, energy, API serving,
 > visualization) get a sibling doc here as they are built.
+
+## intelligence/ — Intelligence Layer reference docs
+
+The layer past preprocessing: it characterises normal machine behaviour and
+(later) scores deviation from it. One document per component.
+
+| Component | Doc |
+|---|---|
+| Behaviour Intelligence (profiles + baselines) | [intelligence/behaviour_intelligence.md](intelligence/behaviour_intelligence.md) |
+
+> Correlation Intelligence and PCA (Iteration B), then anomaly scoring, get a
+> sibling doc here as they are built.
 
 ## project-state/ — versioned snapshots
 
@@ -52,6 +65,7 @@ version transition. Not authoritative state; they record what *should* change.
 | If the document is… | Put it in… | Naming |
 |---|---|---|
 | A reference for how a pipeline stage / component works | `pipeline/` | `lower_snake_case.md` |
+| A reference for an Intelligence Layer component | `intelligence/` | `lower_snake_case.md` |
 | A point-in-time project-state snapshot | `project-state/` | `MASTER_VERSION_vN.md` |
 | A proposal, RFC, or pre-version plan | `proposals/` | `IMPROVEMENT_PROPOSALS_vN.md` / `RFC_<topic>.md` |
 
