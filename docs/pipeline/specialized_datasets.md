@@ -46,7 +46,7 @@ What this stage **does not** do:
 |---|---|
 | `data/datasets/master/master_dataset.parquet` | Canonical master. Engineered matrix promoted after integrity checks. |
 | `data/datasets/master/master_dataset_report.{json,md}` | Master integrity findings. |
-| `data/datasets/master/schema_lock.json` | Optional schema snapshot (column names + dtypes). Bootstrapped on first run; subsequent runs report drift. |
+| `configs/schema_lock.json` | **Tracked** schema contract (column names + dtypes). Version-controlled (outside the git-ignored `data/` tree). Generate/refresh with `python -m src.data.datasets.run_datasets --write-schema-lock`, then commit; subsequent runs report drift against it. |
 | `data/datasets/specialized/anomaly_detection_dataset.parquet` | Local-deviation features for Isolation Forest / Autoencoders / DBSCAN. |
 | `data/datasets/specialized/forecasting_dataset.parquet` | Predictive temporal structure for LSTM / Transformers / XGBoost forecasting. |
 | `data/datasets/specialized/energy_dataset.parquet` | Energetic optimisation & efficiency analysis. |
@@ -202,7 +202,7 @@ Run by `master_validation.py` before any projection sees the data.
 | Timestamp monotonicity | `IMPORTANT` | `require_monotonic_timestamps` |
 | Timestamp uniqueness | `IMPORTANT` | `require_unique_timestamps` |
 | Per-column NaN budget | `IMPORTANT` | `max_nan_fraction_per_column` (default `0.30`) |
-| Schema lock drift | `AWARE` | `schema_lock` (compares against `schema_lock.json` when present; bootstraps on first run) |
+| Schema lock drift | `AWARE` | `schema_lock` (compares against the tracked `configs/schema_lock.json` when present; refresh it with `--write-schema-lock`) |
 | Generation-only column drop | `NORMAL` | `drop_columns` (defaults to `["drift"]`) |
 
 The master pass is intentionally lenient on warmup NaNs — long rolling

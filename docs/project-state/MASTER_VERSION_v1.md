@@ -9,7 +9,7 @@
 | Scope label | Data preprocessing layer — first complete version |
 | Snapshot author | `master-version-agent` |
 | Baseline status | This document is the v1 baseline; every future `MASTER_VERSION_vN` diffs against it. |
-| Source-of-truth documents (not replaced) | [CLAUDE.md](../CLAUDE.md), [docs/data_cleaning.md](data_cleaning.md), [docs/time_series_engineering.md](time_series_engineering.md), [docs/feature_engineering.md](feature_engineering.md), [docs/specialized_datasets.md](specialized_datasets.md) |
+| Source-of-truth documents (not replaced) | [CLAUDE.md](../../CLAUDE.md), [docs/pipeline/data_cleaning.md](../pipeline/data_cleaning.md), [docs/pipeline/time_series_engineering.md](../pipeline/time_series_engineering.md), [docs/pipeline/feature_engineering.md](../pipeline/feature_engineering.md), [docs/pipeline/specialized_datasets.md](../pipeline/specialized_datasets.md) |
 
 This snapshot consolidates — it does not rewrite. Where this document
 makes a claim, the underlying reference doc remains authoritative.
@@ -18,7 +18,7 @@ makes a claim, the underlying reference doc remains authoritative.
 
 ## 2. Executive Summary
 
-- **InjexCore** is a predictive-maintenance system for plastic injection moulding machines that classifies each production cycle as `normal` / `warning` / `anomaly` (see [CLAUDE.md](../CLAUDE.md)).
+- **InjexCore** is a predictive-maintenance system for plastic injection moulding machines that classifies each production cycle as `normal` / `warning` / `anomaly` (see [CLAUDE.md](../../CLAUDE.md)).
 - **Today (2026-05-29) the data preprocessing layer is complete end to end.** Four stages — cleaning, time-series engineering, feature engineering, and specialized datasets — ship working code, validated configs, audit reports, and tests.
 - **A canonical master dataset now exists.** Raw vendor CSVs flow deterministically into `data/datasets/master/master_dataset.parquet` (167,331 rows × 566 columns), plus three model-family projections for anomaly detection, forecasting, and energy analysis.
 - **All four stages share the same shape**: one package per stage, semantic-driven column routing from a single classification CSV, pydantic-validated YAML policy, JSON + Markdown audit reports built from a common `Finding` record.
@@ -88,32 +88,32 @@ Master and specialized parquet artefacts confirmed present on disk under `data/d
 ## 5. Active Systems
 
 - **Pipeline packages** (`src/data/`):
-  - [src/data/cleaning/](../src/data/cleaning/) — 6 detect+remediate modules.
-  - [src/data/time_series/](../src/data/time_series/) — 6-stage temporal pipeline.
-  - [src/data/feature_engineering/](../src/data/feature_engineering/) — 6-family derived-feature pipeline.
-  - [src/data/datasets/](../src/data/datasets/) — master validation + 3 projections.
-- **Orchestration shim**: [src/preprocessing.py](../src/preprocessing.py) — stages `cleaning | ts | fe | features | datasets | all`.
+  - [src/data/cleaning/](../../src/data/cleaning/) — 6 detect+remediate modules.
+  - [src/data/time_series/](../../src/data/time_series/) — 6-stage temporal pipeline.
+  - [src/data/feature_engineering/](../../src/data/feature_engineering/) — 6-family derived-feature pipeline.
+  - [src/data/datasets/](../../src/data/datasets/) — master validation + 3 projections.
+- **Orchestration shim**: [src/preprocessing.py](../../src/preprocessing.py) — stages `cleaning | ts | fe | features | datasets | all`.
 - **Configuration** — four pydantic-validated YAML policies, all `extra="forbid"`:
-  - [configs/cleaning.yaml](../configs/cleaning.yaml)
-  - [configs/time_series.yaml](../configs/time_series.yaml)
-  - [configs/feature_engineering.yaml](../configs/feature_engineering.yaml)
-  - [configs/specialized_datasets.yaml](../configs/specialized_datasets.yaml)
+  - [configs/cleaning.yaml](../../configs/cleaning.yaml)
+  - [configs/time_series.yaml](../../configs/time_series.yaml)
+  - [configs/feature_engineering.yaml](../../configs/feature_engineering.yaml)
+  - [configs/specialized_datasets.yaml](../../configs/specialized_datasets.yaml)
 - **Semantic dictionary** — one CSV drives column routing across all four stages: `data/features/variable_classification.csv`.
 - **Test suite** — 136 unit tests under `tests/unit/data/{cleaning,time_series,feature_engineering,datasets}/`, ~8 s with `pytest tests/`.
 - **Reference docs**:
-  - [docs/data_cleaning.md](data_cleaning.md)
-  - [docs/time_series_engineering.md](time_series_engineering.md)
-  - [docs/feature_engineering.md](feature_engineering.md)
-  - [docs/specialized_datasets.md](specialized_datasets.md)
+  - [docs/pipeline/data_cleaning.md](../pipeline/data_cleaning.md)
+  - [docs/pipeline/time_series_engineering.md](../pipeline/time_series_engineering.md)
+  - [docs/pipeline/feature_engineering.md](../pipeline/feature_engineering.md)
+  - [docs/pipeline/specialized_datasets.md](../pipeline/specialized_datasets.md)
 - **Placeholders (not yet implemented)**: `src/anomaly_detection.py`, `src/visualization.py`.
 
 ---
 
 ## 6. Agent & Skill Ecosystem
 
-The project-local Claude Code tooling under [.claude/agents/](../.claude/agents/)
+The project-local Claude Code tooling under [.claude/agents/](../../.claude/agents/)
 and `.claude/skills/` was foundational to delivering v1. Per
-[CLAUDE.md](../CLAUDE.md), the ecosystem includes **18 agents** and
+[CLAUDE.md](../../CLAUDE.md), the ecosystem includes **18 agents** and
 **52 skills**, auto-discovered via YAML frontmatter.
 
 Agents that materially shaped the preprocessing layer that ships in v1:
@@ -125,7 +125,7 @@ Agents that materially shaped the preprocessing layer that ships in v1:
 - `documentation-architect-agent` — the four `docs/*.md` reference documents.
 - `repository-architecture-agent`, `day-closing-agent`, `master-version-agent` *(Opus)* — stewardship, drift detection, and this snapshot.
 
-Skill inventory (52 skills across 15 domains) is not enumerated here; see [CLAUDE.md](../CLAUDE.md#skills-52) for the full table.
+Skill inventory (52 skills across 15 domains) is not enumerated here; see [CLAUDE.md](../../CLAUDE.md#skills-52) for the full table.
 
 ---
 
@@ -181,7 +181,7 @@ metadata.
 
 ## 10. Confidence Level
 
-- **High confidence**: pipeline structure, file paths, configs, test count, dataset row/column counts (verified against `data/datasets/` artefacts and [CLAUDE.md](../CLAUDE.md)).
+- **High confidence**: pipeline structure, file paths, configs, test count, dataset row/column counts (verified against `data/datasets/` artefacts and [CLAUDE.md](../../CLAUDE.md)).
 - **Medium confidence**: column counts for specialized datasets (taken from the user-provided snapshot; not independently re-counted in this pass).
 - **Lower confidence / explicit uncertainty**: real-machine anomaly thresholds (private, not visible to this snapshot); future model-family decisions in v2 (subject to evaluation results not yet available).
 
@@ -189,14 +189,14 @@ metadata.
 
 ## 11. References
 
-- Project guidance: [CLAUDE.md](../CLAUDE.md)
+- Project guidance: [CLAUDE.md](../../CLAUDE.md)
 - Pipeline references:
-  - [docs/data_cleaning.md](data_cleaning.md)
-  - [docs/time_series_engineering.md](time_series_engineering.md)
-  - [docs/feature_engineering.md](feature_engineering.md)
-  - [docs/specialized_datasets.md](specialized_datasets.md)
-- Specialized-datasets policy: [configs/specialized_datasets.yaml](../configs/specialized_datasets.yaml)
-- Agent ecosystem: [.claude/agents/](../.claude/agents/)
+  - [docs/pipeline/data_cleaning.md](../pipeline/data_cleaning.md)
+  - [docs/pipeline/time_series_engineering.md](../pipeline/time_series_engineering.md)
+  - [docs/pipeline/feature_engineering.md](../pipeline/feature_engineering.md)
+  - [docs/pipeline/specialized_datasets.md](../pipeline/specialized_datasets.md)
+- Specialized-datasets policy: [configs/specialized_datasets.yaml](../../configs/specialized_datasets.yaml)
+- Agent ecosystem: [.claude/agents/](../../.claude/agents/)
 - Global standards (apply automatically): `~/.claude/CLAUDE.md`, `~/.claude/rules/python.md`, `~/.claude/rules/ml-pipeline.md`, `~/.claude/rules/git.md`
 
 ---
