@@ -15,6 +15,9 @@ repos:
         files: ^src/
         additional_dependencies:
           - types-PyYAML
+          # Required so the pydantic mypy plugin (configured in pyproject.toml)
+          # can be imported inside the isolated pre-commit hook environment.
+          - pydantic>=2.7,<3
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4

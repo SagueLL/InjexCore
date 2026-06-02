@@ -65,6 +65,11 @@ indent-style = "space"
 [tool.mypy]
 python_version = "3.11"
 files = ["src"]
+# Pydantic's mypy plugin teaches mypy that ``Field(...)`` (incl. positional
+# defaults and numeric constraints like ``ge=``/``le=``) and
+# ``default_factory=Model`` produce a no-arg-constructible model — without it,
+# constrained policy submodels are wrongly flagged as needing arguments.
+plugins = ["pydantic.mypy"]
 warn_unused_configs = true
 ignore_missing_imports = true
 no_implicit_optional = true
@@ -74,7 +79,7 @@ check_untyped_defs = true
 # ingestion). Its numpy-random int/float reassignments are noisy under mypy;
 # scoped exemption now, tighten when the generator is revisited.
 [[tool.mypy.overrides]]
-module = "src.data_generation"
+module = "src.data_generation.generate"
 disable_error_code = ["assignment"]
 
 [tool.pytest.ini_options]
