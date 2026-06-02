@@ -16,6 +16,7 @@ meaning. This stage emits three interpretable families instead:
 All rolling windows use ``closed='left'`` for leakage symmetry with
 :mod:`src.data.time_series.rolling_windows`.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -64,7 +65,11 @@ def detect(
                     column=col,
                     count=1,
                     action_taken=f"add:{col}_runfrac_{w}",
-                    evidence={"window": int(w), "closed": "left", "category": "state_flag"},
+                    evidence={
+                        "window": int(w),
+                        "closed": "left",
+                        "category": "state_flag",
+                    },
                 )
             )
 
@@ -142,7 +147,7 @@ def apply(
 
     for f in relevant:
         col = f.column
-        if col not in df.columns:
+        if col is None or col not in df.columns:
             continue
         source = df[col]
 

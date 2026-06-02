@@ -1,12 +1,10 @@
 """Unit tests for ``src.data.cleaning.frozen_sensors``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-import numpy as np
 import pandas as pd
-import pytest
-
 from src.data.cleaning import frozen_sensors
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import CleaningPolicy, FrozenSensorsPolicy
@@ -121,9 +119,7 @@ def test_epsilon_rate_column_uses_epsilon_equality(
     for col in groups.process:
         df[col] = [float(j) for j in range(len(df))]
     # Within epsilon: tiny variations < 1e-6.
-    df["granulator_production_rate"] = [
-        5.0 + 1e-10 * j for j in range(len(df))
-    ]
+    df["granulator_production_rate"] = [5.0 + 1e-10 * j for j in range(len(df))]
     findings = frozen_sensors.detect(df, short_policy, groups)
     rate = [f for f in findings if f.column == "granulator_production_rate"]
     assert len(rate) == 1

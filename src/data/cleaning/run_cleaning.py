@@ -18,6 +18,7 @@ Outputs:
     data/features/cleaning_report.json
     data/features/cleaning_report.md
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import CONFIGS_DIR, FEATURES_DIR, PROCESSED_DATA_DIR
 from src.data.cleaning import (
     duplicates,
     frozen_sensors,
@@ -38,14 +40,13 @@ from src.data.cleaning import (
 )
 from src.data.cleaning.column_groups import DEFAULT_CLASSIFICATION, load_groups
 from src.data.cleaning.io import DEFAULT_DICTIONARY, DEFAULT_RAW, load_raw, write_clean
-from src.data.cleaning.policy import CleaningPolicy, load_policy
+from src.data.cleaning.policy import load_policy
 from src.data.cleaning.reporting import Finding, write_json, write_markdown
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_POLICY = PROJECT_ROOT / "configs" / "cleaning.yaml"
-DEFAULT_CLEAN = PROJECT_ROOT / "data" / "processed" / "Dades_pellet_clean.csv"
-DEFAULT_REPORT_JSON = PROJECT_ROOT / "data" / "features" / "cleaning_report.json"
-DEFAULT_REPORT_MD = PROJECT_ROOT / "data" / "features" / "cleaning_report.md"
+DEFAULT_POLICY = CONFIGS_DIR / "cleaning.yaml"
+DEFAULT_CLEAN = PROCESSED_DATA_DIR / "Dades_pellet_clean.csv"
+DEFAULT_REPORT_JSON = FEATURES_DIR / "cleaning_report.json"
+DEFAULT_REPORT_MD = FEATURES_DIR / "cleaning_report.md"
 
 PIPELINE = [
     ("timestamps", timestamps),
@@ -92,7 +93,9 @@ def run(
     df = load_raw(raw_csv, dictionary)
     log.info(
         "Loaded %d rows x %d cols in %.1fs",
-        len(df), df.shape[1], time.perf_counter() - t0,
+        len(df),
+        df.shape[1],
+        time.perf_counter() - t0,
     )
 
     groups = load_groups(classification)
@@ -105,7 +108,10 @@ def run(
         all_findings.extend(findings)
         log.info(
             "Module %-20s: %4d findings (%.1fs); shape now %s",
-            name, len(findings), time.perf_counter() - t0, df.shape,
+            name,
+            len(findings),
+            time.perf_counter() - t0,
+            df.shape,
         )
     return df, all_findings
 

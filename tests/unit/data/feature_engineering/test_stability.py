@@ -1,12 +1,11 @@
 """Family 2 — stability features."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.feature_engineering import stability
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
-
 
 _SENSOR = "granulator_power"
 _TEMP = "conditioner_inlet_temp"
@@ -45,7 +44,9 @@ def test_rolling_range_is_max_minus_min(tiny_frame_factory, fe_policy, groups):
     assert out[col].iloc[20] == 14.0
 
 
-def test_std_ratio_uses_upstream_columns_when_present(tiny_frame_factory, fe_policy, groups):
+def test_std_ratio_uses_upstream_columns_when_present(
+    tiny_frame_factory, fe_policy, groups
+):
     df = _indexed(tiny_frame_factory, n=80)
     # Inject precomputed std columns; values are arbitrary but distinct.
     df[f"{_SENSOR}_std_5"] = 2.0

@@ -10,6 +10,7 @@ Rules live in ``configs/specialized_datasets.yaml`` under the
 ``forecasting`` key; this module is a thin wrapper around
 :func:`src.data.datasets.selectors.project`.
 """
+
 from __future__ import annotations
 
 import pandas as pd

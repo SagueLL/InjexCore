@@ -1,4 +1,5 @@
 """Duplicate detection: timestamps, payload windows, and PLC bursts."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -29,9 +30,12 @@ def apply(
     out = df.copy()
     drop_rows: set[int] = set()
     for f in findings:
-        if f.finding_type == "duplicate_timestamp" and f.evidence.get("drop_rows"):
-            drop_rows.update(f.evidence["drop_rows"])
-        elif f.finding_type == "plc_burst" and f.evidence.get("drop_rows"):
+        if (
+            f.finding_type == "duplicate_timestamp"
+            and f.evidence.get("drop_rows")
+            or f.finding_type == "plc_burst"
+            and f.evidence.get("drop_rows")
+        ):
             drop_rows.update(f.evidence["drop_rows"])
     if drop_rows:
         out = out.drop(index=list(drop_rows)).reset_index(drop=True)
@@ -58,7 +62,9 @@ def _detect_dup_timestamps(df: pd.DataFrame) -> list[Finding]:
 
 
 def _detect_dup_payloads(
-    df: pd.DataFrame, policy: CleaningPolicy, groups: ColumnGroups,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
+    groups: ColumnGroups,
 ) -> list[Finding]:
     signal_cols = [c for c in groups.signal_columns() if c in df.columns]
     if not signal_cols:
@@ -98,7 +104,8 @@ def _payload_finding(start: int, end: int, length: int) -> Finding:
 
 
 def _detect_plc_bursts(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     ts = df["timestamp"]
     deltas = ts.diff().dt.total_seconds()
@@ -134,5 +141,8 @@ def _burst_finding(df: pd.DataFrame, start: int, end: int) -> Finding:
         row_range=(start, end),
         count=len(indices),
         action_taken="keep_median_drop_neighbours",
-        evidence={"drop_rows": [int(i) for i in drop_rows], "kept_row": int(median_pos)},
+        evidence={
+            "drop_rows": [int(i) for i in drop_rows],
+            "kept_row": int(median_pos),
+        },
     )

@@ -4,6 +4,7 @@ Detects unparseable timestamps, non-monotonic rows, gaps that exceed
 ``gap_factor * expected_period_s``, and forward jumps beyond
 ``max_legal_jump_s`` (DST / TZ artefacts).
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -81,7 +82,8 @@ def _detect_non_monotonic(df: pd.DataFrame) -> list[Finding]:
 
 
 def _detect_gaps_and_jumps(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     ts = df["timestamp"]
     valid = ts.notna()
@@ -93,26 +95,30 @@ def _detect_gaps_and_jumps(
     jump_mask = deltas > policy.timestamps.max_legal_jump_s
 
     for idx, delta in deltas[gap_mask & ~jump_mask].items():
-        findings.append(Finding(
-            check="timestamps",
-            severity=Severity.IMPORTANT,
-            finding_type="gap",
-            column="timestamp",
-            row_range=(int(idx) - 1, int(idx)),
-            count=1,
-            action_taken="tag_only",
-            evidence={"delta_s": float(delta), "threshold_s": gap_threshold},
-        ))
+        findings.append(
+            Finding(
+                check="timestamps",
+                severity=Severity.IMPORTANT,
+                finding_type="gap",
+                column="timestamp",
+                row_range=(int(idx) - 1, int(idx)),
+                count=1,
+                action_taken="tag_only",
+                evidence={"delta_s": float(delta), "threshold_s": gap_threshold},
+            )
+        )
 
     for idx, delta in deltas[jump_mask].items():
-        findings.append(Finding(
-            check="timestamps",
-            severity=Severity.IMPORTANT,
-            finding_type="dst_jump",
-            column="timestamp",
-            row_range=(int(idx) - 1, int(idx)),
-            count=1,
-            action_taken="tag_only",
-            evidence={"delta_s": float(delta)},
-        ))
+        findings.append(
+            Finding(
+                check="timestamps",
+                severity=Severity.IMPORTANT,
+                finding_type="dst_jump",
+                column="timestamp",
+                row_range=(int(idx) - 1, int(idx)),
+                count=1,
+                action_taken="tag_only",
+                evidence={"delta_s": float(delta)},
+            )
+        )
     return findings

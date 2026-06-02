@@ -8,12 +8,13 @@ an operational question.
 
 Re-run to regenerate the notebook; outputs are stripped (committed clean).
 """
+
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from src.config import PROJECT_ROOT
+
 DST = PROJECT_ROOT / "notebooks" / "eda_ds_pellet.ipynb"
 
 
@@ -59,9 +60,7 @@ CELLS: list[dict] = [
         "9. KPI summary (specific energy, throughput)\n"
         "10. Findings checklist\n"
     ),
-
     md("## 1. Setup & loading"),
-
     code(
         "from pathlib import Path\n"
         "\n"
@@ -78,7 +77,6 @@ CELLS: list[dict] = [
         "DICT_PATH = Path('../data/features/data_pellets_dictionary.csv')\n"
         "CLF_PATH = Path('../data/features/variable_classification.csv')\n"
     ),
-
     code(
         "# Source CSV has 3 header rows: row0 = description, row1 = PLC code, row2 = unit.\n"
         "# Decimal separator is ',' and encoding is latin-1.\n"
@@ -99,7 +97,6 @@ CELLS: list[dict] = [
         "df.index.name = 'timestamp'\n"
         "df.shape\n"
     ),
-
     code(
         "# Rename PLC codes to logical variable names via the dictionary.\n"
         "dict_df = pd.read_csv(DICT_PATH)\n"
@@ -116,7 +113,6 @@ CELLS: list[dict] = [
         "\n"
         "df.dtypes.value_counts()\n"
     ),
-
     code(
         "# Variable groups (intersect with what is actually present).\n"
         "process_vars = [v for v in clf[clf['Category'] == 'Process'].index if v in df.columns]\n"
@@ -125,19 +121,16 @@ CELLS: list[dict] = [
         "print(f'Process: {len(process_vars)} | Control: {len(control_vars)} | State: {len(state_vars)}')\n"
         "df.head(3)\n"
     ),
-
     md(
         "## 2. Operating-state overview\n"
         "\n"
         "Filter idle rows *before* computing stats — production-off periods sit at zero across most signals and would otherwise dominate distributions and correlations.\n"
     ),
-
     code(
         "# Fraction of rows where each binary flag is 1.\n"
         "state_pct = (df[state_vars].mean() * 100).round(2).sort_values(ascending=False)\n"
         "state_pct\n"
     ),
-
     code(
         "# 'Active' = any of the three running flags is 1.\n"
         "running_flags = [c for c in state_vars if c.endswith('_running')]\n"
@@ -146,7 +139,6 @@ CELLS: list[dict] = [
         "print(f'Active fraction: {active_pct:.2f}%')\n"
         "print(f'Active rows:     {int(df[\"is_active\"].sum()):,} / {len(df):,}')\n"
     ),
-
     code(
         "# Daily active fraction — visualises production cadence over the 116 days.\n"
         "daily_active = df['is_active'].resample('1D').mean()\n"
@@ -157,7 +149,6 @@ CELLS: list[dict] = [
         "ax.set_ylim(0, 1.05); ax.grid(True, alpha=0.3)\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     code(
         "# Alarm minutes per day per equipment.\n"
         "alarm_flags = [c for c in state_vars if c.endswith('_alarm')]\n"
@@ -168,32 +159,26 @@ CELLS: list[dict] = [
         "print('Total alarm minutes per equipment:')\n"
         "print(df[alarm_flags].sum())\n"
     ),
-
     md("## 3. Distributions — process variables (active rows only)"),
-
     code(
         "active = df[df['is_active'] == 1]\n"
         "active[process_vars].hist(figsize=(20, 15), bins=60, color='steelblue', edgecolor='white')\n"
         "plt.suptitle('Process variable distributions (active production rows)', y=1.0, fontsize=14)\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     code(
         "# Stability ranking: coefficient of variation. High CV -> intermittent / multi-mode.\n"
         "desc = active[process_vars].describe().T\n"
         "desc['cv'] = (desc['std'] / desc['mean'].replace(0, np.nan)).abs()\n"
         "desc[['mean', 'std', 'min', 'max', 'cv']].sort_values('cv', ascending=False).round(3)\n"
     ),
-
     md(
         "**Reading the table above:**\n"
         "- Very low CV (< 0.05) → tightly controlled signal; controller is in regulation.\n"
         "- Very high CV (> 0.5) → highly intermittent or operating across multiple regimes; check the histogram for bimodality.\n"
         "- Bimodal distributions usually mean two distinct operating modes — cluster before training.\n"
     ),
-
     md("## 4. Time series — process signals (downsampled to 5 min)"),
-
     code(
         "# Downsample for plotting; full 167k samples are unreadable on a single plot.\n"
         "df_5m = df[process_vars].resample('5min').mean()\n"
@@ -207,13 +192,11 @@ CELLS: list[dict] = [
         "fig.suptitle('Process variables — 5-min mean across the full record', y=1.0, fontsize=12)\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     md(
         "## 5. Controller tracking — setpoint vs measurement\n"
         "\n"
         "For each setpoint, compare against the closest physical measurement. Sustained tracking error → controller saturation, manual override, or sensor drift. Spikes → upset events.\n"
     ),
-
     code(
         "# SP -> PV mapping (domain-informed; refine if a real mapping doc emerges).\n"
         "pairs = [\n"
@@ -230,15 +213,12 @@ CELLS: list[dict] = [
         "    ax.set_title(title); ax.legend(loc='upper right'); ax.grid(True, alpha=0.3)\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     code(
         "# Tracking error stats during active production.\n"
         "err = pd.DataFrame({f'{pv}__minus__{sp}': active[pv] - active[sp] for sp, pv, _ in pairs})\n"
         "err.describe().T[['mean', 'std', 'min', 'max']].round(3)\n"
     ),
-
     md("## 6. Correlations — process + control variables (active rows)"),
-
     code(
         "numeric_vars = process_vars + control_vars\n"
         "corr = active[numeric_vars].corr()\n"
@@ -253,7 +233,6 @@ CELLS: list[dict] = [
         "ax.set_title('Pearson correlations — Process + Control (active rows)')\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     code(
         "# Top 20 absolute correlations (no self-pairs, no mirrored duplicates).\n"
         "# Filter a != b inline instead of mutating the diagonal (pandas 3.x returns read-only arrays).\n"
@@ -265,13 +244,11 @@ CELLS: list[dict] = [
         "    rows.append({'var_a': a, 'var_b': b, 'r': round(corr.loc[a, b], 3)})\n"
         "pd.DataFrame(rows).head(20)\n"
     ),
-
     md(
         "## 7. State-conditioned distributions — active vs idle\n"
         "\n"
         "Quantifies how strongly each signal moves with production. Signals with overlapping active/idle distributions are weak production indicators; signals with cleanly separated distributions are strong ones.\n"
     ),
-
     code(
         "key = [\n"
         "    'granulator_power', 'expander_ex2_outlet_temp', 'conditioner_steam_loop_temp',\n"
@@ -284,13 +261,11 @@ CELLS: list[dict] = [
         "    ax.set_title(col, fontsize=10); ax.legend()\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     md(
         "## 8. Alarm windows\n"
         "\n"
         "Plot normalized signals around the first alarm onset for each equipment. Leading patterns (signal moves before the flag) are candidates for predictive-maintenance features.\n"
     ),
-
     code(
         "# Detect rising edges per alarm flag.\n"
         "onsets = {}\n"
@@ -299,7 +274,6 @@ CELLS: list[dict] = [
         "    onsets[a] = df.index[diff == 1].tolist()\n"
         "{a: len(t) for a, t in onsets.items()}\n"
     ),
-
     code(
         "key_signals = [\n"
         "    'granulator_power', 'granulator_production_rate',\n"
@@ -329,9 +303,7 @@ CELLS: list[dict] = [
         "for f in alarm_flags:\n"
         "    plot_alarm_window(f, key_signals)\n"
     ),
-
     md("## 9. KPI summary — specific energy & throughput"),
-
     code(
         "active_only = df[df['is_active'] == 1]\n"
         "print('Specific energy (kWh/t) — active periods:')\n"
@@ -349,7 +321,6 @@ CELLS: list[dict] = [
         "    a.grid(True, alpha=0.3); a.set_xlabel('time')\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     code(
         "# Energy-vs-throughput scatter — operating-point view.\n"
         "fig, ax = plt.subplots(figsize=(8, 6))\n"
@@ -364,7 +335,6 @@ CELLS: list[dict] = [
         "ax.grid(True, alpha=0.3)\n"
         "plt.tight_layout(); plt.show()\n"
     ),
-
     md(
         "## 10. Findings checklist\n"
         "\n"

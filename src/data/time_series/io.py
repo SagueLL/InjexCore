@@ -6,15 +6,17 @@ CSV (mirror). Parquet is preferred because the matrix grows to several
 hundred columns after the rolling/lag explosion — Parquet is columnar,
 typed and roughly an order of magnitude smaller on disk.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CLEAN_IN = PROJECT_ROOT / "data" / "processed" / "Dades_pellet_clean.csv"
-DEFAULT_FEATURES = PROJECT_ROOT / "data" / "features" / "Dades_pellet_features.parquet"
+from src.config import FEATURES_DIR, PROCESSED_DATA_DIR
+
+DEFAULT_CLEAN_IN = PROCESSED_DATA_DIR / "Dades_pellet_clean.csv"
+DEFAULT_FEATURES = FEATURES_DIR / "Dades_pellet_features.parquet"
 
 
 def load_clean(csv_path: Path = DEFAULT_CLEAN_IN) -> pd.DataFrame:

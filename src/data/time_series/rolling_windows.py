@@ -14,9 +14,10 @@ window at index ``t`` sees samples ``[t-W, t)`` only — never ``t``
 itself. The setting is exposed in :class:`FeatureFamilySpec.closed` for
 forecasting use-cases where this constraint can be relaxed.
 """
+
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pandas as pd
 
@@ -113,7 +114,9 @@ def apply(
             new_cols[name] = roll.std()
         elif f.finding_type == "rolling_trend":
             new_cols[name] = (
-                source.diff().rolling(window=window, min_periods=min_periods, closed=closed).mean()
+                source.diff()
+                .rolling(window=window, min_periods=min_periods, closed=closed)
+                .mean()
             )
 
     if not new_cols:

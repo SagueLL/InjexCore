@@ -1,11 +1,10 @@
 """Unit tests for ``src.data.cleaning.duplicates``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
-import pytest
-
 from src.data.cleaning import duplicates
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import CleaningPolicy

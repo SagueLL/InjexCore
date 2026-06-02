@@ -10,6 +10,7 @@ No auto-combinatorics: every ratio is one entry in
 ``configs/feature_engineering.yaml`` so the resulting feature set is
 auditable and physically meaningful.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -93,7 +94,9 @@ def detect(
 
 
 def _compute(
-    df: pd.DataFrame, evidence: dict, eps: float,
+    df: pd.DataFrame,
+    evidence: dict,
+    eps: float,
 ) -> pd.Series:
     op = evidence["op"]
     a = df[evidence["a"]]
@@ -126,9 +129,18 @@ def apply(
         if f.check != "physical_ratios" or f.finding_type != "ratio":
             continue
         ev = f.evidence
-        if any(c not in df.columns for c in _required_columns(
-            RatioSpec(name=ev["name"], op=ev["op"], a=ev["a"], b=ev.get("b"), factor=ev.get("factor")),
-        )):
+        if any(
+            c not in df.columns
+            for c in _required_columns(
+                RatioSpec(
+                    name=ev["name"],
+                    op=ev["op"],
+                    a=ev["a"],
+                    b=ev.get("b"),
+                    factor=ev.get("factor"),
+                ),
+            )
+        ):
             continue
         eps = float(ev.get("epsilon", 1.0e-6))
         series = _compute(df, ev, eps)

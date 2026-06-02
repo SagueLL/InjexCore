@@ -1,9 +1,9 @@
 """Selectors engine: hybrid regex + category + explicit overrides."""
+
 from __future__ import annotations
 
 import pandas as pd
 import pytest
-
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.datasets.policy import SelectorSpec
 from src.data.datasets.reporting import Severity
@@ -78,9 +78,7 @@ def test_explicit_includes_and_unmatched_finding(fixture_frame, groups):
     result = select_columns(fixture_frame, spec, groups, check_name="x")
     assert "granulator_power" in result.columns
     assert "does_not_exist" not in result.columns
-    unmatched = [
-        f for f in result.findings if f.finding_type == "unmatched_include"
-    ]
+    unmatched = [f for f in result.findings if f.finding_type == "unmatched_include"]
     assert len(unmatched) == 1
     assert unmatched[0].severity is Severity.AWARE
 

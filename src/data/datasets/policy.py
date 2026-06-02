@@ -16,13 +16,13 @@ Selectors use a **hybrid** strategy:
   (``timestamp`` plus all ``Metadata`` rows in the classification CSV)
   are always preserved so the dataset can be joined back to master.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # Master validation
@@ -83,8 +83,6 @@ class SpecializedDatasetsPolicy(BaseModel):
 def load_policy(yaml_path: Path) -> SpecializedDatasetsPolicy:
     """Read the YAML config and validate it against the schema."""
     if not yaml_path.exists():
-        raise FileNotFoundError(
-            f"Specialized-datasets policy not found at {yaml_path}"
-        )
+        raise FileNotFoundError(f"Specialized-datasets policy not found at {yaml_path}")
     raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
     return SpecializedDatasetsPolicy.model_validate(raw)

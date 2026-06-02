@@ -5,19 +5,17 @@ cleaned CSV (fallback when the user wants to skip the ts stage).
 Output: a wide engineered feature matrix written as Parquet (primary)
 and optionally CSV (mirror).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_FEATURES_IN = (
-    PROJECT_ROOT / "data" / "features" / "Dades_pellet_features.parquet"
-)
-DEFAULT_ENGINEERED_OUT = (
-    PROJECT_ROOT / "data" / "features" / "Dades_pellet_engineered.parquet"
-)
+from src.config import FEATURES_DIR
+
+DEFAULT_FEATURES_IN = FEATURES_DIR / "Dades_pellet_features.parquet"
+DEFAULT_ENGINEERED_OUT = FEATURES_DIR / "Dades_pellet_engineered.parquet"
 
 
 def load_features(path: Path = DEFAULT_FEATURES_IN) -> pd.DataFrame:

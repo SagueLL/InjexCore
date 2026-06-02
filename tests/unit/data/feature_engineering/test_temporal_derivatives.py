@@ -1,13 +1,11 @@
 """Family 1 — temporal derivatives."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
-
 from src.data.feature_engineering import temporal_derivatives
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
-
 
 _SENSOR = "granulator_power"
 
@@ -20,7 +18,9 @@ def _indexed(tiny_frame_factory, n: int = 30) -> pd.DataFrame:
 def test_acceleration_findings_emitted(tiny_frame_factory, fe_policy, groups):
     df = _indexed(tiny_frame_factory)
     findings = temporal_derivatives.detect(df, fe_policy, groups)
-    accel = [f for f in findings if f.finding_type == "acceleration" and f.column == _SENSOR]
+    accel = [
+        f for f in findings if f.finding_type == "acceleration" and f.column == _SENSOR
+    ]
     assert len(accel) == len(fe_policy.temporal_derivatives.acceleration.lags)
 
 
@@ -35,7 +35,9 @@ def test_acceleration_matches_diff_diff(tiny_frame_factory, fe_policy, groups):
     assert col in out.columns
     expected = df[_SENSOR].diff(1).diff(1)
     pd.testing.assert_series_equal(
-        out[col].rename(_SENSOR), expected, check_names=False,
+        out[col].rename(_SENSOR),
+        expected,
+        check_names=False,
     )
 
 
@@ -70,8 +72,7 @@ def test_sp_pv_missing_yields_important_finding(tiny_frame_factory, fe_policy, g
     df = _indexed(tiny_frame_factory).drop(columns=["granulator_power_sp"])
     findings = temporal_derivatives.detect(df, fe_policy, groups)
     assert any(
-        f.finding_type == "sp_pv_deviation_missing"
-        and f.severity.value == "important"
+        f.finding_type == "sp_pv_deviation_missing" and f.severity.value == "important"
         for f in findings
     )
 

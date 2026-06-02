@@ -1,5 +1,5 @@
 """Re-export the shared :class:`Finding` / :class:`Severity` types and
-report writers from :mod:`src.data.cleaning.reporting`.
+report writers from :mod:`src.data._common.reporting`.
 
 The specialized-datasets stage emits ``Finding`` records describing
 master-dataset integrity checks and the column projection decisions of
@@ -7,7 +7,8 @@ each downstream dataset. The format is identical to the cleaning,
 time-series and feature-engineering reports so a single downstream
 reader can consume all four.
 """
-from src.data.cleaning.reporting import (
+
+from src.data._common.reporting import (
     Finding,
     Severity,
     write_json,

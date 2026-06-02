@@ -1,11 +1,10 @@
 """Unit tests for ``src.data.cleaning.state_consistency``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
-import pytest
-
 from src.data.cleaning import state_consistency
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import CleaningPolicy
@@ -74,7 +73,8 @@ def test_alarm_persistent_run_flagged_after_window(
     df.loc[2:14, "granulator_g2_running"] = 0
     findings = state_consistency.detect(df, policy, groups)
     target = [
-        f for f in findings
+        f
+        for f in findings
         if f.finding_type == "alarm_with_extended_shutdown"
         and f.column == "granulator_g2_alarm"
     ]

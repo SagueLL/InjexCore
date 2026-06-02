@@ -6,6 +6,7 @@ action: ``critical`` always masks the cell; ``important`` clips when
 ``clip_soft_violations`` is true, else masks; ``aware`` tags only.
 Bounds marked ``integer: true`` additionally flag fractional numerics.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -47,12 +48,17 @@ def apply(
         elif f.action_taken == "clip":
             bmin = f.evidence.get("min")
             bmax = f.evidence.get("max")
-            out.loc[rows, f.column] = out.loc[rows, f.column].clip(lower=bmin, upper=bmax)
+            out.loc[rows, f.column] = out.loc[rows, f.column].clip(
+                lower=bmin, upper=bmax
+            )
     return out
 
 
 def _detect_one_column(
-    df: pd.DataFrame, col: str, bound: Bound, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    col: str,
+    bound: Bound,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     series = pd.to_numeric(df[col], errors="coerce")
     findings: list[Finding] = []
@@ -71,7 +77,11 @@ def _detect_one_column(
 
 
 def _oob_finding(
-    col: str, bound: Bound, mask: pd.Series, series: pd.Series, policy: CleaningPolicy,
+    col: str,
+    bound: Bound,
+    mask: pd.Series,
+    series: pd.Series,
+    policy: CleaningPolicy,
 ) -> Finding:
     rows = [int(i) for i in mask[mask].index.tolist()]
     severity = Severity(bound.severity)
@@ -95,7 +105,9 @@ def _oob_finding(
 
 
 def _fractional_finding(
-    col: str, bound: Bound, mask: pd.Series,
+    col: str,
+    bound: Bound,
+    mask: pd.Series,
 ) -> Finding:
     rows = [int(i) for i in mask[mask].index.tolist()]
     return Finding(

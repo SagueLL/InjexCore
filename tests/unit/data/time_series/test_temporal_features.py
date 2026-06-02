@@ -1,9 +1,9 @@
 """Stage 5 — generic temporal features (lag, pct_change, velocity)."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.time_series import temporal_features
 
 _SENSOR = "granulator_power"
@@ -28,9 +28,7 @@ def test_velocity_matches_diff(tiny_frame_factory, ts_policy, groups):
     df[_SENSOR] = np.arange(20, dtype=float) ** 2
     findings = temporal_features.detect(df, ts_policy, groups)
     out = temporal_features.apply(df, findings, ts_policy, groups)
-    assert (
-        out[f"{_SENSOR}_velocity_1"].dropna() == df[_SENSOR].diff(1).dropna()
-    ).all()
+    assert (out[f"{_SENSOR}_velocity_1"].dropna() == df[_SENSOR].diff(1).dropna()).all()
 
 
 def test_pct_change_matches_pandas(tiny_frame_factory, ts_policy, groups):

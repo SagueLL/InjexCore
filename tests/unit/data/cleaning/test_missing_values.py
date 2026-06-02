@@ -1,12 +1,11 @@
 """Unit tests for ``src.data.cleaning.missing_values``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
-import pytest
-
 from src.data.cleaning import missing_values
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import CleaningPolicy
@@ -50,9 +49,9 @@ def test_machine_off_keeps_nan(
     df.loc[3:5, "granulator_roller_gap"] = np.nan
     findings = missing_values.detect(df, policy, groups)
     target = [
-        f for f in findings
-        if f.column == "granulator_roller_gap"
-        and f.finding_type == "machine_off"
+        f
+        for f in findings
+        if f.column == "granulator_roller_gap" and f.finding_type == "machine_off"
     ]
     assert len(target) == 1
     assert target[0].severity.value == "aware"
@@ -74,9 +73,9 @@ def test_broken_sensor_long_run_critical(
     df.loc[5:38, "granulator_roller_gap"] = np.nan
     findings = missing_values.detect(df, policy, groups)
     target = [
-        f for f in findings
-        if f.column == "granulator_roller_gap"
-        and f.finding_type == "broken_sensor"
+        f
+        for f in findings
+        if f.column == "granulator_roller_gap" and f.finding_type == "broken_sensor"
     ]
     assert len(target) == 1
     assert target[0].severity.value == "critical"
@@ -93,7 +92,8 @@ def test_lost_communication_short_run_interpolates(
     df.loc[4:6, "granulator_roller_gap"] = np.nan
     findings = missing_values.detect(df, policy, groups)
     target = [
-        f for f in findings
+        f
+        for f in findings
         if f.column == "granulator_roller_gap"
         and f.finding_type == "lost_communication"
     ]
@@ -117,7 +117,8 @@ def test_missing_by_design_kept_as_nan(
     df.loc[2:4, "batch_id"] = np.nan
     findings = missing_values.detect(df, policy, groups)
     target = [
-        f for f in findings
+        f
+        for f in findings
         if f.column == "batch_id" and f.finding_type == "missing_by_design"
     ]
     assert len(target) == 1

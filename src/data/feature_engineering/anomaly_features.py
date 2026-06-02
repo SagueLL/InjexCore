@@ -18,6 +18,7 @@ matrix carries no model state.
 Routing is restricted to the ``categories`` whitelist (process sensors
 by default). Setpoints / state / alarm flags are skipped.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -33,7 +34,9 @@ def _min_periods(window: int) -> int:
 
 
 def _columns_in_categories(
-    df: pd.DataFrame, groups: ColumnGroups, allowed: list[str],
+    df: pd.DataFrame,
+    groups: ColumnGroups,
+    allowed: list[str],
 ) -> list[str]:
     allowed_set = set(allowed)
     return [c for c in df.columns if groups.semantic_category(c) in allowed_set]
@@ -130,14 +133,22 @@ def _safe_div(num: pd.Series, denom: pd.Series, eps: float) -> pd.Series:
 
 
 def _rolling_z(
-    s: pd.Series, w: int, closed: str, min_periods: int, eps: float,
+    s: pd.Series,
+    w: int,
+    closed: str,
+    min_periods: int,
+    eps: float,
 ) -> pd.Series:
     roll = s.rolling(window=w, min_periods=min_periods, closed=closed)
     return _safe_div(s - roll.mean(), roll.std(), eps)
 
 
 def _rolling_robust_z(
-    s: pd.Series, w: int, closed: str, min_periods: int, eps: float,
+    s: pd.Series,
+    w: int,
+    closed: str,
+    min_periods: int,
+    eps: float,
 ) -> pd.Series:
     roll = s.rolling(window=w, min_periods=min_periods, closed=closed)
     median = roll.median()
@@ -185,7 +196,11 @@ def apply(
             min_periods = int(f.evidence.get("min_periods", _min_periods(w)))
             eps = float(f.evidence.get("epsilon", 1.0e-6))
             new_cols[f"{col}_robust_z_{w}"] = _rolling_robust_z(
-                s, w, closed, min_periods, eps,
+                s,
+                w,
+                closed,
+                min_periods,
+                eps,
             )
         elif f.finding_type == "global_z":
             eps = float(f.evidence.get("epsilon", 1.0e-6))

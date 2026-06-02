@@ -11,17 +11,17 @@ This loader returns a :class:`pandas.DataFrame` with **logical** column
 names (e.g. ``conditioner_inlet_temp`` instead of ``E1172_1``), as defined
 in ``data/features/data_pellets_dictionary.csv``.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_RAW = PROJECT_ROOT / "data" / "raw" / "Dades_pellet.csv"
-DEFAULT_DICTIONARY = (
-    PROJECT_ROOT / "data" / "features" / "data_pellets_dictionary.csv"
-)
+from src.config import FEATURES_DIR, RAW_DATA_DIR
+
+DEFAULT_RAW = RAW_DATA_DIR / "Dades_pellet.csv"
+DEFAULT_DICTIONARY = FEATURES_DIR / "data_pellets_dictionary.csv"
 
 TIMESTAMP_FORMATS = ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S")
 
@@ -29,7 +29,7 @@ TIMESTAMP_FORMATS = ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S")
 def _plc_code_to_logical_name(dictionary_path: Path) -> dict[str, str]:
     """Build PLC-code → logical-variable-name map from the dictionary CSV."""
     df = pd.read_csv(dictionary_path)
-    return dict(zip(df["Sensor"].astype(str), df["Variable"].astype(str)))
+    return dict(zip(df["Sensor"].astype(str), df["Variable"].astype(str), strict=True))
 
 
 def load_raw(

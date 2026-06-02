@@ -13,6 +13,7 @@ Severity rules:
 
 Apply masks only critical findings (re-classified later by missing_values).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -43,9 +44,16 @@ def detect(
             continue
         use_eps = col in eps_cols
         for start, end in _frozen_runs(df[col], min_run, eps if use_eps else None):
-            findings.append(_make_finding(
-                df, col, start, end, groups, running_present,
-            ))
+            findings.append(
+                _make_finding(
+                    df,
+                    col,
+                    start,
+                    end,
+                    groups,
+                    running_present,
+                )
+            )
     return findings
 
 
@@ -67,7 +75,9 @@ def apply(
 
 
 def _frozen_runs(
-    series: pd.Series, min_len: int, eps: float | None,
+    series: pd.Series,
+    min_len: int,
+    eps: float | None,
 ) -> list[tuple[int, int]]:
     values = series.to_numpy()
     n = len(values)
@@ -145,7 +155,10 @@ def _objective_for(col: str, groups: ColumnGroups) -> str | None:
 
 
 def _all_flags_off(
-    df: pd.DataFrame, flags: list[str], start: int, end: int,
+    df: pd.DataFrame,
+    flags: list[str],
+    start: int,
+    end: int,
 ) -> bool:
     sub = df.loc[start:end, flags]
     return bool((sub.fillna(0) == 0).all().all())

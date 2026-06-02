@@ -1,8 +1,8 @@
 """Stage 2 — temporal index behaviour."""
+
 from __future__ import annotations
 
 import pandas as pd
-
 from src.data.time_series import temporal_index
 
 

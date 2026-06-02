@@ -5,6 +5,7 @@ time-aware rolling windows. Duplicate-on-index rows are dropped (keeping
 the first) when ``drop_duplicates_on_index`` is true; this should
 normally be a no-op after cleaning.
 """
+
 from __future__ import annotations
 
 import pandas as pd

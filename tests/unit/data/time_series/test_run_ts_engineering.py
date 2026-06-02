@@ -1,4 +1,5 @@
 """Orchestrator smoke test: pipeline produces a feature matrix and report."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from src.data.time_series import run_ts_engineering
 
 
@@ -22,7 +22,10 @@ def cleaned_csv(tiny_frame_factory, tmp_path: Path) -> Path:
 def test_run_produces_expected_schema(cleaned_csv, project_root, tmp_path):
     df, findings = run_ts_engineering.run(
         clean_csv=cleaned_csv,
-        classification=project_root / "data" / "features" / "variable_classification.csv",
+        classification=project_root
+        / "data"
+        / "features"
+        / "variable_classification.csv",
         policy_path=project_root / "configs" / "time_series.yaml",
     )
 
@@ -51,7 +54,9 @@ def test_run_produces_expected_schema(cleaned_csv, project_root, tmp_path):
 
     # Findings list is non-empty and dominated by NORMAL audit records.
     assert findings
-    normal_pct = sum(1 for f in findings if f.severity.value == "normal") / len(findings)
+    normal_pct = sum(1 for f in findings if f.severity.value == "normal") / len(
+        findings
+    )
     assert normal_pct > 0.8
 
 
@@ -62,12 +67,18 @@ def test_main_writes_artifacts(cleaned_csv, project_root, tmp_path):
 
     rc = run_ts_engineering.main(
         [
-            "--clean", str(cleaned_csv),
-            "--classification", str(project_root / "data" / "features" / "variable_classification.csv"),
-            "--policy", str(project_root / "configs" / "time_series.yaml"),
-            "--out-parquet", str(out_parquet),
-            "--out-json", str(out_json),
-            "--out-md", str(out_md),
+            "--clean",
+            str(cleaned_csv),
+            "--classification",
+            str(project_root / "data" / "features" / "variable_classification.csv"),
+            "--policy",
+            str(project_root / "configs" / "time_series.yaml"),
+            "--out-parquet",
+            str(out_parquet),
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
         ]
     )
     assert rc == 0

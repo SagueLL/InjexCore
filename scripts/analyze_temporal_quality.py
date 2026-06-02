@@ -9,23 +9,24 @@ Outputs:
   - data/features/temporal_quality_report.json  (raw findings)
   - data/features/temporal_questions.csv        (questions + importance + finding)
 """
+
 from __future__ import annotations
 
 import csv
 import json
 import statistics
 from datetime import datetime
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC = PROJECT_ROOT / "data" / "raw" / "Dades_pellet.csv"
-OUT_DIR = PROJECT_ROOT / "data" / "features"
+from src.config import FEATURES_DIR, PROJECT_ROOT, RAW_DATA_DIR
+
+SRC = RAW_DATA_DIR / "Dades_pellet.csv"
+OUT_DIR = FEATURES_DIR
 REPORT_PATH = OUT_DIR / "temporal_quality_report.json"
 QUESTIONS_PATH = OUT_DIR / "temporal_questions.csv"
 
 TS_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EXPECTED_PERIOD_S = 60.0  # 1 minute, confirmed from EDA
-GAP_FACTOR = 2.0          # delta > GAP_FACTOR * expected_period → gap
+GAP_FACTOR = 2.0  # delta > GAP_FACTOR * expected_period → gap
 
 
 def parse_ts(s: str) -> datetime | None:
@@ -57,7 +58,7 @@ def main() -> None:
 
     prev_ts: datetime | None = None
     per_col_nan_counts: list[int] = []
-    per_col_nan_runs: list[int] = []   # longest consecutive NaN run per column
+    per_col_nan_runs: list[int] = []  # longest consecutive NaN run per column
     per_col_current_run: list[int] = []
     col_codes: list[str] = []
     col_descriptions: list[str] = []
@@ -70,7 +71,7 @@ def main() -> None:
         reader = csv.reader(f)
         descriptions_es = next(reader)
         codes = next(reader)
-        units = next(reader)
+        _units = next(reader)  # units header row, not used downstream
         col_codes = [c.strip() for c in codes]
         col_descriptions = [d.strip() for d in descriptions_es]
         n_cols = len(codes)
@@ -99,11 +100,13 @@ def main() -> None:
                     elif delta == 0:
                         duplicates += 1
                     elif delta > GAP_FACTOR * EXPECTED_PERIOD_S:
-                        gaps.append((
-                            prev_ts.strftime(TS_FORMAT)[:-3],
-                            ts.strftime(TS_FORMAT)[:-3],
-                            round(delta, 3),
-                        ))
+                        gaps.append(
+                            (
+                                prev_ts.strftime(TS_FORMAT)[:-3],
+                                ts.strftime(TS_FORMAT)[:-3],
+                                round(delta, 3),
+                            )
+                        )
                 prev_ts = ts
                 timestamps.append(ts)
 
@@ -134,12 +137,20 @@ def main() -> None:
     max_delta = max(deltas_s) if deltas_s else 0.0
     # Percentiles via sorted list
     sorted_deltas = sorted(deltas_s)
+
     def pct(p: float) -> float:
         if not sorted_deltas:
             return 0.0
-        k = max(0, min(len(sorted_deltas) - 1, int(round(p * (len(sorted_deltas) - 1)))))
+        k = max(
+            0, min(len(sorted_deltas) - 1, int(round(p * (len(sorted_deltas) - 1))))
+        )
         return sorted_deltas[k]
-    p01 = pct(0.01); p05 = pct(0.05); p50 = pct(0.50); p95 = pct(0.95); p99 = pct(0.99)
+
+    p01 = pct(0.01)
+    p05 = pct(0.05)
+    p50 = pct(0.50)
+    p95 = pct(0.95)
+    p99 = pct(0.99)
     jitter_iqr = pct(0.75) - pct(0.25)
 
     # Cadence drift: split deltas into 10 equal chunks, compare medians
@@ -148,40 +159,58 @@ def main() -> None:
         chunk = n_deltas // 10
         for i in range(10):
             seg = deltas_s[i * chunk : (i + 1) * chunk if i < 9 else n_deltas]
-            drift_segments.append({
-                "segment": i,
-                "n": len(seg),
-                "median_s": round(statistics.median(seg), 4),
-                "mean_s": round(statistics.mean(seg), 4),
-            })
+            drift_segments.append(
+                {
+                    "segment": i,
+                    "n": len(seg),
+                    "median_s": round(statistics.median(seg), 4),
+                    "mean_s": round(statistics.mean(seg), 4),
+                }
+            )
     drift_range = (
-        max(s["median_s"] for s in drift_segments) - min(s["median_s"] for s in drift_segments)
-        if drift_segments else 0.0
+        max(s["median_s"] for s in drift_segments)
+        - min(s["median_s"] for s in drift_segments)
+        if drift_segments
+        else 0.0
     )
 
     # Total span
     first_ts = timestamps[0] if timestamps else None
     last_ts = timestamps[-1] if timestamps else None
     span_s = (last_ts - first_ts).total_seconds() if first_ts and last_ts else 0.0
-    expected_rows_at_perfect_cadence = int(span_s / EXPECTED_PERIOD_S) + 1 if span_s else 0
-    coverage_pct = round(100.0 * rows_total / expected_rows_at_perfect_cadence, 3) if expected_rows_at_perfect_cadence else 0.0
+    expected_rows_at_perfect_cadence = (
+        int(span_s / EXPECTED_PERIOD_S) + 1 if span_s else 0
+    )
+    coverage_pct = (
+        round(100.0 * rows_total / expected_rows_at_perfect_cadence, 3)
+        if expected_rows_at_perfect_cadence
+        else 0.0
+    )
 
     # Per-column NaN summary (top offenders)
     per_col_summary = []
     for i in range(len(col_codes)):
-        per_col_summary.append({
-            "idx": i,
-            "code": col_codes[i],
-            "description": col_descriptions[i],
-            "nan_count": per_col_nan_counts[i],
-            "nan_pct": round(100.0 * per_col_nan_counts[i] / rows_total, 3) if rows_total else 0.0,
-            "longest_nan_run": per_col_nan_runs[i],
-        })
-    top_nan_cols = sorted(per_col_summary, key=lambda d: d["nan_count"], reverse=True)[:10]
+        per_col_summary.append(
+            {
+                "idx": i,
+                "code": col_codes[i],
+                "description": col_descriptions[i],
+                "nan_count": per_col_nan_counts[i],
+                "nan_pct": round(100.0 * per_col_nan_counts[i] / rows_total, 3)
+                if rows_total
+                else 0.0,
+                "longest_nan_run": per_col_nan_runs[i],
+            }
+        )
+    top_nan_cols = sorted(per_col_summary, key=lambda d: d["nan_count"], reverse=True)[
+        :10
+    ]
 
     # Gap summary
     n_gaps = len(gaps)
-    total_gap_seconds = sum(g[2] - EXPECTED_PERIOD_S for g in gaps)  # excess over expected
+    total_gap_seconds = sum(
+        g[2] - EXPECTED_PERIOD_S for g in gaps
+    )  # excess over expected
     largest_gaps = sorted(gaps, key=lambda g: g[2], reverse=True)[:10]
 
     report = {
@@ -253,11 +282,15 @@ def main() -> None:
     # Console summary
     print("\n--- Summary ---")
     print(f"Rows:                 {rows_total:,}")
-    print(f"Span:                 {report['span_days']} days "
-          f"({report['first_timestamp']} -> {report['last_timestamp']})")
+    print(
+        f"Span:                 {report['span_days']} days "
+        f"({report['first_timestamp']} -> {report['last_timestamp']})"
+    )
     print(f"Median delta:         {report['cadence']['median_s']} s")
     print(f"Jitter (stdev):       {report['cadence']['stdev_s']} s")
-    print(f"Min / Max delta:      {report['cadence']['min_s']} / {report['cadence']['max_s']} s")
+    print(
+        f"Min / Max delta:      {report['cadence']['min_s']} / {report['cadence']['max_s']} s"
+    )
     print(f"Coverage vs perfect:  {coverage_pct} %")
     print(f"Gaps > 2x expected:   {n_gaps}")
     print(f"Duplicates:           {duplicates}")
@@ -289,7 +322,8 @@ def build_questions(r: dict) -> list[dict[str, str]]:
             "Importance": "Very Critical",
             "Rationale": "Mismatched clocks invalidate cross-sensor models (lag features, correlations, anomaly co-occurrence). Whole pipeline breaks if false.",
             "Method": "Inspect whether columns share a single timestamp column; check per-sensor NaN co-occurrence.",
-            "Finding": sync["comment"] + f" Rows with any signal NaN: {sync['rows_with_any_signal_missing']:,}; rows with ALL signals NaN: {sync['rows_with_all_signals_missing']:,}.",
+            "Finding": sync["comment"]
+            + f" Rows with any signal NaN: {sync['rows_with_any_signal_missing']:,}; rows with ALL signals NaN: {sync['rows_with_all_signals_missing']:,}.",
         },
         {
             "Question": "Are timestamps monotonically increasing?",
@@ -317,7 +351,8 @@ def build_questions(r: dict) -> list[dict[str, str]]:
             "Importance": "Critical",
             "Rationale": "Per-sensor dropouts mean features collapse silently — model degrades on the affected sensor's contribution.",
             "Method": "Per-column NaN counts and longest-NaN-run.",
-            "Finding": "Top offenders (NaN count): " + ", ".join(
+            "Finding": "Top offenders (NaN count): "
+            + ", ".join(
                 f"{c['code']}={c['nan_count']:,} ({c['nan_pct']}%, longest run={c['longest_nan_run']})"
                 for c in r["top_nan_columns"][:5]
             ),
@@ -334,7 +369,8 @@ def build_questions(r: dict) -> list[dict[str, str]]:
             "Importance": "Very High",
             "Rationale": "Cadence drift causes silent shifts in temporal feature meaning across the dataset (a 1-min rolling mean today != 1-min rolling mean six months ago).",
             "Method": "Split deltas into 10 equal segments; compare segment medians.",
-            "Finding": f"Range of segment-median deltas: {drift['median_range_across_segments_s']}s across 10 segments. Per-segment medians: " + ", ".join(f"{s['median_s']}s" for s in drift["segments"]),
+            "Finding": f"Range of segment-median deltas: {drift['median_range_across_segments_s']}s across 10 segments. Per-segment medians: "
+            + ", ".join(f"{s['median_s']}s" for s in drift["segments"]),
         },
         {
             "Question": "What is the actual sampling frequency?",
@@ -369,9 +405,13 @@ def build_questions(r: dict) -> list[dict[str, str]]:
             "Importance": "Medium",
             "Rationale": "DST shifts produce 1-hour gaps or duplicates twice a year — easy to mistake for sensor faults.",
             "Method": "Inspect timestamps near typical DST boundaries (last Sun of Mar / Oct) for ±1h jumps.",
-            "Finding": "Largest gaps to review for DST: " + ", ".join(
-                f"{g['from']}→{g['to']} ({g['delta_s']}s)" for g in gaps["largest_gaps_top10"][:3]
-            ) if gaps["largest_gaps_top10"] else "No gaps recorded.",
+            "Finding": "Largest gaps to review for DST: "
+            + ", ".join(
+                f"{g['from']}→{g['to']} ({g['delta_s']}s)"
+                for g in gaps["largest_gaps_top10"][:3]
+            )
+            if gaps["largest_gaps_top10"]
+            else "No gaps recorded.",
         },
         {
             "Question": "Are there recurring periodic patterns (hourly / daily) in cadence or gaps?",

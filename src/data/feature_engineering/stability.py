@@ -21,6 +21,7 @@ does not capture.
 Routing is constrained by the ``categories`` whitelist (process sensors
 by default). Setpoints and state / alarm flags are never targeted.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -36,20 +37,26 @@ def _min_periods(window: int) -> int:
 
 
 def _columns_in_categories(
-    df: pd.DataFrame, groups: ColumnGroups, allowed: list[str],
+    df: pd.DataFrame,
+    groups: ColumnGroups,
+    allowed: list[str],
 ) -> list[str]:
     allowed_set = set(allowed)
     return [c for c in df.columns if groups.semantic_category(c) in allowed_set]
 
 
 def _columns_in_units(
-    df: pd.DataFrame, groups: ColumnGroups, units: list[str], allowed: list[str],
+    df: pd.DataFrame,
+    groups: ColumnGroups,
+    units: list[str],
+    allowed: list[str],
 ) -> list[str]:
     """Subset of ``_columns_in_categories`` further filtered by ``Unity``."""
     cat_cols = set(_columns_in_categories(df, groups, allowed))
     classification = groups.classification
     return [
-        c for c in df.columns
+        c
+        for c in df.columns
         if c in cat_cols
         and c in classification.index
         and classification.loc[c, "Unity"] in units
@@ -163,7 +170,10 @@ def detect(
 
 
 def _rolling_std(
-    s: pd.Series, w: int, closed: str, min_periods: int,
+    s: pd.Series,
+    w: int,
+    closed: str,
+    min_periods: int,
 ) -> pd.Series:
     """Use the upstream time-series column if it is already present, else
     recompute. This avoids a noticeable cost on wide frames."""
@@ -171,7 +181,10 @@ def _rolling_std(
 
 
 def _rolling_mean(
-    s: pd.Series, w: int, closed: str, min_periods: int,
+    s: pd.Series,
+    w: int,
+    closed: str,
+    min_periods: int,
 ) -> pd.Series:
     return s.rolling(window=w, min_periods=min_periods, closed=closed).mean()
 
@@ -188,11 +201,14 @@ def _rolling_mad(s: pd.Series, w: int, closed: str, min_periods: int) -> pd.Seri
     """Rolling median-absolute-deviation. Pandas has no built-in, so we
     feed a callable into ``rolling.apply``. Used only on units C / bar by
     default to keep cost contained."""
+
     def _mad(arr: np.ndarray) -> float:
         med = np.median(arr)
         return float(np.median(np.abs(arr - med)))
+
     return s.rolling(window=w, min_periods=min_periods, closed=closed).apply(
-        _mad, raw=True,
+        _mad,
+        raw=True,
     )
 
 
@@ -238,7 +254,9 @@ def apply(
             else:
                 long_std = _rolling_std(s, long, "left", _min_periods(long))
             new_cols[f"{col}_stdratio_{short}_{long}"] = _safe_div(
-                short_std, long_std, eps,
+                short_std,
+                long_std,
+                eps,
             )
         elif f.finding_type == "rolling_range":
             w = int(f.evidence["window"])

@@ -6,6 +6,7 @@ enabled, each column is aggregated using the per-category rule from
 setpoints, ``max`` for state flags / alarms). Metadata columns fall back
 to ``last``.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -13,7 +14,6 @@ import pandas as pd
 from src.data.time_series.column_groups import ColumnGroups
 from src.data.time_series.policy import ResamplingPolicy, TimeSeriesPolicy
 from src.data.time_series.reporting import Finding, Severity
-
 
 _DEFAULT_AGG = "last"
 
@@ -34,9 +34,7 @@ def _agg_map(
     groups: ColumnGroups,
     rs: ResamplingPolicy,
 ) -> dict[str, str]:
-    return {
-        col: _agg_for_column(col, groups, rs.aggregations) for col in df.columns
-    }
+    return {col: _agg_for_column(col, groups, rs.aggregations) for col in df.columns}
 
 
 def detect(

@@ -1,9 +1,8 @@
 """Family 5 — operative features."""
+
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
 from src.data.feature_engineering import operative_features
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
 
@@ -13,7 +12,9 @@ def _indexed(tiny_frame_factory, n: int = 30) -> pd.DataFrame:
     return df.set_index("timestamp")
 
 
-def test_time_since_machine_off_resets_on_rising_edge(tiny_frame_factory, fe_policy, groups):
+def test_time_since_machine_off_resets_on_rising_edge(
+    tiny_frame_factory, fe_policy, groups
+):
     df = _indexed(tiny_frame_factory, n=10)
     # All running flags off for 5 samples, then on.
     for c in ("granulator_g2_running", "feeder_al2_running", "conditioner_me2_direct"):

@@ -1,12 +1,11 @@
 """Family 6 — statistical anomaly features."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.feature_engineering import anomaly_features
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
-
 
 _SENSOR = "granulator_power"
 

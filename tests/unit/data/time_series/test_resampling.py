@@ -1,7 +1,6 @@
 """Stage 3 — optional resampling behaviour."""
-from __future__ import annotations
 
-import pandas as pd
+from __future__ import annotations
 
 from src.data.time_series import resampling
 from src.data.time_series.policy import TimeSeriesPolicy

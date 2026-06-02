@@ -1,9 +1,9 @@
 """Stage 4b — specialised state / alarm features."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.time_series import state_features
 
 _RUN = "granulator_g2_running"
@@ -28,7 +28,9 @@ def test_runfrac_matches_hand_calc(tiny_frame_factory, ts_policy, groups):
     assert out[col].iloc[15] == expected
 
 
-def test_tsla_resets_on_activation_and_increments(tiny_frame_factory, ts_policy, groups):
+def test_tsla_resets_on_activation_and_increments(
+    tiny_frame_factory, ts_policy, groups
+):
     df = _indexed(tiny_frame_factory, n=10)
     # Activations at rows 2 and 6; rows before row 2 are pre-first-activation.
     df[_RUN] = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0]

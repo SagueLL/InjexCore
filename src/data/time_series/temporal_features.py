@@ -13,9 +13,10 @@ columns are configurable via :attr:`TimeSeriesPolicy.category_defaults`.
 Lag values ``N >= 1`` are leak-safe by construction; the orchestrator
 does not need to enforce additional guards.
 """
+
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pandas as pd
 

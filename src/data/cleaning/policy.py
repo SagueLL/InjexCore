@@ -4,58 +4,60 @@ Single source of truth for thresholds and per-variable physical bounds.
 The full policy is materialised from ``configs/cleaning.yaml`` at startup
 and passed read-only into every detect/apply function.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
+from pydantic import Field
 
-from pydantic import BaseModel, Field
+from src.data._common.models import StrictModel
 
 if TYPE_CHECKING:
     pass
 
 
-class TimestampsPolicy(BaseModel):
+class TimestampsPolicy(StrictModel):
     expected_period_s: float = 60.0
     gap_factor: float = 2.0
     max_legal_jump_s: float = 3600.0
 
 
-class DuplicatesPolicy(BaseModel):
+class DuplicatesPolicy(StrictModel):
     payload_window_rows: int = 5
     burst_max_delta_s: float = 1.0
     burst_min_rows: int = 3
 
 
-class FrozenSensorsPolicy(BaseModel):
+class FrozenSensorsPolicy(StrictModel):
     frozen_min_minutes: int = 120
     epsilon_rate_cols: list[str] = Field(default_factory=list)
     epsilon: float = 1e-6
     skip_columns: list[str] = Field(default_factory=list)
 
 
-class MissingValuesPolicy(BaseModel):
+class MissingValuesPolicy(StrictModel):
     broken_sensor_min_run: int = 30
     interpolation_max_run: int = 5
     alarm_alignment_window_min: int = 10
     missing_by_design_columns: list[str] = Field(default_factory=list)
 
 
-class Bound(BaseModel):
+class Bound(StrictModel):
     min: float
     max: float
     severity: str = "important"
     integer: bool = False
 
 
-class PhysicalRangesPolicy(BaseModel):
+class PhysicalRangesPolicy(StrictModel):
     clip_soft_violations: bool = False
     bounds: dict[str, Bound] = Field(default_factory=dict)
 
 
-class StateConsistencyPolicy(BaseModel):
+class StateConsistencyPolicy(StrictModel):
     min_production_kgmin: float = 0.1
     min_power_pct: float = 1.0
     alarm_shutdown_window_min: int = 10
@@ -64,7 +66,7 @@ class StateConsistencyPolicy(BaseModel):
     hot_temperature_threshold_c: float = 200.0
 
 
-class CleaningPolicy(BaseModel):
+class CleaningPolicy(StrictModel):
     """Aggregate policy loaded from ``configs/cleaning.yaml``."""
 
     timestamps: TimestampsPolicy = Field(default_factory=TimestampsPolicy)

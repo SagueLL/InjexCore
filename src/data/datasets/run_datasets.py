@@ -22,6 +22,7 @@ Outputs:
 * ``data/datasets/specialized/forecasting_dataset.parquet`` + report.
 * ``data/datasets/specialized/energy_dataset.parquet`` + report.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +34,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import CONFIGS_DIR
 from src.data.datasets import (
     anomaly_projection,
     energy_projection,
@@ -67,8 +69,7 @@ from src.data.datasets.policy import (
 )
 from src.data.datasets.reporting import Finding, write_json, write_markdown
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_POLICY = PROJECT_ROOT / "configs" / "specialized_datasets.yaml"
+DEFAULT_POLICY = CONFIGS_DIR / "specialized_datasets.yaml"
 
 log = logging.getLogger("datasets")
 
@@ -103,26 +104,29 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--classification", type=Path, default=DEFAULT_CLASSIFICATION)
     p.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     p.add_argument("--schema-lock", type=Path, default=DEFAULT_SCHEMA_LOCK)
+    p.add_argument(
+        "--write-schema-lock",
+        action="store_true",
+        help=(
+            "Snapshot the current master schema to --schema-lock "
+            "(configs/schema_lock.json) and continue. Commit the file to "
+            "establish/refresh the column-drift contract."
+        ),
+    )
     # Master outputs
     p.add_argument("--master-parquet", type=Path, default=DEFAULT_MASTER_OUT)
     p.add_argument(
         "--master-report-json", type=Path, default=DEFAULT_MASTER_REPORT_JSON
     )
-    p.add_argument(
-        "--master-report-md", type=Path, default=DEFAULT_MASTER_REPORT_MD
-    )
+    p.add_argument("--master-report-md", type=Path, default=DEFAULT_MASTER_REPORT_MD)
     # Anomaly outputs
     p.add_argument("--anomaly-parquet", type=Path, default=DEFAULT_ANOMALY_OUT)
     p.add_argument(
         "--anomaly-report-json", type=Path, default=DEFAULT_ANOMALY_REPORT_JSON
     )
-    p.add_argument(
-        "--anomaly-report-md", type=Path, default=DEFAULT_ANOMALY_REPORT_MD
-    )
+    p.add_argument("--anomaly-report-md", type=Path, default=DEFAULT_ANOMALY_REPORT_MD)
     # Forecasting outputs
-    p.add_argument(
-        "--forecasting-parquet", type=Path, default=DEFAULT_FORECASTING_OUT
-    )
+    p.add_argument("--forecasting-parquet", type=Path, default=DEFAULT_FORECASTING_OUT)
     p.add_argument(
         "--forecasting-report-json",
         type=Path,
@@ -138,9 +142,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--energy-report-json", type=Path, default=DEFAULT_ENERGY_REPORT_JSON
     )
-    p.add_argument(
-        "--energy-report-md", type=Path, default=DEFAULT_ENERGY_REPORT_MD
-    )
+    p.add_argument("--energy-report-md", type=Path, default=DEFAULT_ENERGY_REPORT_MD)
     p.add_argument(
         "--no-write",
         action="store_true",
@@ -177,19 +179,26 @@ def run(
     engineered = load_engineered(engineered_path)
     log.info(
         "Loaded %d rows x %d cols in %.1fs",
-        len(engineered), engineered.shape[1], time.perf_counter() - t0,
+        len(engineered),
+        engineered.shape[1],
+        time.perf_counter() - t0,
     )
 
     groups = load_groups(classification)
 
     t0 = time.perf_counter()
     master_df, master_findings = master_validation.run(
-        engineered, policy, groups, schema_lock_path=schema_lock_path,
+        engineered,
+        policy,
+        groups,
+        schema_lock_path=schema_lock_path,
     )
     log.info(
         "Stage %-22s: %4d findings (%.1fs); master shape %s",
-        "master_validation", len(master_findings),
-        time.perf_counter() - t0, master_df.shape,
+        "master_validation",
+        len(master_findings),
+        time.perf_counter() - t0,
+        master_df.shape,
     )
 
     projections: list[tuple[pd.DataFrame, list[Finding]]] = []
@@ -202,7 +211,10 @@ def run(
         df, findings = module.run(master_df, policy, groups)
         log.info(
             "Stage %-22s: %4d findings (%.1fs); shape %s",
-            name, len(findings), time.perf_counter() - t0, df.shape,
+            name,
+            len(findings),
+            time.perf_counter() - t0,
+            df.shape,
         )
         projections.append((df, findings))
 
@@ -214,7 +226,9 @@ def run(
     )
 
 
-def _write_report(findings: list[Finding], json_path: Path, md_path: Path, title: str) -> None:
+def _write_report(
+    findings: list[Finding], json_path: Path, md_path: Path, title: str
+) -> None:
     write_json(findings, json_path)
     write_markdown(findings, md_path, title=title)
 
@@ -233,6 +247,10 @@ def main(argv: list[str] | None = None) -> int:
         args.policy,
         schema_lock_path=args.schema_lock,
     )
+
+    if args.write_schema_lock:
+        log.info("Writing schema lock → %s", args.schema_lock)
+        master_validation.write_schema_lock(master[0], args.schema_lock)
 
     outputs = [
         DatasetOutput(
@@ -281,12 +299,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.no_write:
             log.info(
                 "--no-write: skipping %s parquet (%d cols)",
-                out.name, out.df.shape[1],
+                out.name,
+                out.df.shape[1],
             )
             continue
         log.info(
             "Writing %-18s → %s (%d rows x %d cols)",
-            out.name, out.parquet_path, out.df.shape[0], out.df.shape[1],
+            out.name,
+            out.parquet_path,
+            out.df.shape[0],
+            out.df.shape[1],
         )
         write_dataset(out.df, out.parquet_path)
 

@@ -7,29 +7,32 @@ at startup and passed read-only into every detect/apply function.
 Window sizes and lag depths are expressed in *samples*, not seconds — the
 resampling stage (when enabled) makes the sample period predictable.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from src.data._common.models import StrictModel
 
 # ---------------------------------------------------------------------------
 # Stage policies
 # ---------------------------------------------------------------------------
 
 
-class TemporalConversionPolicy(BaseModel):
+class TemporalConversionPolicy(StrictModel):
     enabled: bool = True
     timestamp_col: str = "timestamp"
 
 
-class TemporalIndexPolicy(BaseModel):
+class TemporalIndexPolicy(StrictModel):
     enabled: bool = True
     drop_duplicates_on_index: bool = True
 
 
-class ResamplingPolicy(BaseModel):
+class ResamplingPolicy(StrictModel):
     enabled: bool = False
     rule: str = "1min"
     aggregations: dict[str, str] = Field(
@@ -43,7 +46,7 @@ class ResamplingPolicy(BaseModel):
     )
 
 
-class StateFeaturesPolicy(BaseModel):
+class StateFeaturesPolicy(StrictModel):
     enabled: bool = True
     running_fraction_windows: list[int] = Field(default_factory=lambda: [15, 60, 240])
     time_since_active: bool = True
@@ -55,7 +58,7 @@ class StateFeaturesPolicy(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class FeatureFamilySpec(BaseModel):
+class FeatureFamilySpec(StrictModel):
     """One generic feature family for one semantic category.
 
     Rolling families use ``windows`` (samples); shift-based families
@@ -70,7 +73,7 @@ class FeatureFamilySpec(BaseModel):
     closed: str = "left"
 
 
-class CategoryDefaults(BaseModel):
+class CategoryDefaults(StrictModel):
     """Per-semantic-category default feature families."""
 
     rolling_mean: FeatureFamilySpec = Field(default_factory=FeatureFamilySpec)
@@ -81,7 +84,7 @@ class CategoryDefaults(BaseModel):
     velocity: FeatureFamilySpec = Field(default_factory=FeatureFamilySpec)
 
 
-class ColumnOverride(BaseModel):
+class ColumnOverride(StrictModel):
     """Optional per-column overrides applied on top of category defaults."""
 
     disable_families: list[str] = Field(default_factory=list)
@@ -95,7 +98,7 @@ class ColumnOverride(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class TimeSeriesPolicy(BaseModel):
+class TimeSeriesPolicy(StrictModel):
     """Aggregate policy loaded from ``configs/time_series.yaml``."""
 
     temporal_conversion: TemporalConversionPolicy = Field(

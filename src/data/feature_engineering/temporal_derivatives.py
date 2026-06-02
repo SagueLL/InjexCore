@@ -15,6 +15,7 @@ upstream rolling features. Routing for ``accel`` and ``signchanges`` is
 restricted to the ``categories`` whitelist in the policy (process sensors
 by default); state / alarm flags and setpoints are skipped.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -30,13 +31,12 @@ def _min_periods(window: int) -> int:
 
 
 def _columns_in_categories(
-    df: pd.DataFrame, groups: ColumnGroups, allowed: list[str],
+    df: pd.DataFrame,
+    groups: ColumnGroups,
+    allowed: list[str],
 ) -> list[str]:
     allowed_set = set(allowed)
-    return [
-        c for c in df.columns
-        if groups.semantic_category(c) in allowed_set
-    ]
+    return [c for c in df.columns if groups.semantic_category(c) in allowed_set]
 
 
 def detect(
@@ -156,7 +156,9 @@ def apply(
             d = df[col].diff()
             sign_change = (np.sign(d) * np.sign(d.shift(1)) < 0).astype(float)
             new_cols[f"{col}_signchanges_{w}"] = sign_change.rolling(
-                window=w, min_periods=min_periods, closed=closed,
+                window=w,
+                min_periods=min_periods,
+                closed=closed,
             ).sum()
         elif f.finding_type == "sp_pv_deviation":
             sp_col = f.evidence["sp"]

@@ -1,11 +1,10 @@
 """Unit tests for ``src.data.cleaning.timestamps``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
-import pytest
-
 from src.data.cleaning import timestamps
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import CleaningPolicy
@@ -71,7 +70,10 @@ def test_gap_detected_when_delta_exceeds_threshold(
     assert len(gaps) == 1
     assert gaps[0].severity.value == "important"
     assert gaps[0].action_taken == "tag_only"
-    assert gaps[0].evidence["delta_s"] > policy.timestamps.gap_factor * policy.timestamps.expected_period_s
+    assert (
+        gaps[0].evidence["delta_s"]
+        > policy.timestamps.gap_factor * policy.timestamps.expected_period_s
+    )
 
 
 def test_dst_jump_detected_above_max_legal_jump(

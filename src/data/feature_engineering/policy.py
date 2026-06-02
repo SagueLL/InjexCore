@@ -9,6 +9,7 @@ Windows and lags are in *samples*. The pipeline runs on the
 time-series engineering output, which is assumed to be on a regular
 sample grid (cleaning enforces 60 s; ts resampling is optional).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +17,6 @@ from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # Family 1 — temporal derivatives
@@ -49,9 +49,7 @@ class TemporalDerivativesPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool = True
     acceleration: AccelerationPolicy = Field(default_factory=AccelerationPolicy)
-    sign_change_rate: SignChangeRatePolicy = Field(
-        default_factory=SignChangeRatePolicy
-    )
+    sign_change_rate: SignChangeRatePolicy = Field(default_factory=SignChangeRatePolicy)
     sp_pv_deviation: SpPvDeviationPolicy = Field(default_factory=SpPvDeviationPolicy)
 
 

@@ -20,6 +20,7 @@ Outputs:
 * ``data/features/feature_engineering_report.json``
 * ``data/features/feature_engineering_report.md``
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,6 +31,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import CONFIGS_DIR, FEATURES_DIR
 from src.data.feature_engineering import (
     anomaly_features,
     energetic_features,
@@ -58,14 +60,9 @@ from src.data.feature_engineering.reporting import (
     write_markdown,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_POLICY = PROJECT_ROOT / "configs" / "feature_engineering.yaml"
-DEFAULT_REPORT_JSON = (
-    PROJECT_ROOT / "data" / "features" / "feature_engineering_report.json"
-)
-DEFAULT_REPORT_MD = (
-    PROJECT_ROOT / "data" / "features" / "feature_engineering_report.md"
-)
+DEFAULT_POLICY = CONFIGS_DIR / "feature_engineering.yaml"
+DEFAULT_REPORT_JSON = FEATURES_DIR / "feature_engineering_report.json"
+DEFAULT_REPORT_MD = FEATURES_DIR / "feature_engineering_report.md"
 
 PIPELINE = [
     ("temporal_derivatives", temporal_derivatives),
@@ -116,7 +113,9 @@ def run(
     df = load_features(features_path)
     log.info(
         "Loaded %d rows x %d cols in %.1fs",
-        len(df), df.shape[1], time.perf_counter() - t0,
+        len(df),
+        df.shape[1],
+        time.perf_counter() - t0,
     )
 
     groups = load_groups(classification)
@@ -129,7 +128,10 @@ def run(
         all_findings.extend(findings)
         log.info(
             "Stage %-22s: %4d findings (%.1fs); shape now %s",
-            name, len(findings), time.perf_counter() - t0, df.shape,
+            name,
+            len(findings),
+            time.perf_counter() - t0,
+            df.shape,
         )
     return df, all_findings
 
@@ -154,7 +156,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         log.info(
             "Writing engineered matrix → %s (%d rows x %d cols)",
-            args.out_parquet, len(df), df.shape[1],
+            args.out_parquet,
+            len(df),
+            df.shape[1],
         )
         write_engineered(df, args.out_parquet, args.out_csv)
 

@@ -10,44 +10,38 @@ Outputs (one parquet + one JSON + one Markdown per dataset):
 * Forecasting  → ``data/datasets/specialized/forecasting_dataset.parquet``
 * Energy       → ``data/datasets/specialized/energy_dataset.parquet``
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+from src.config import CONFIGS_DIR, DATASETS_DIR, FEATURES_DIR
 
 # --- Inputs ---------------------------------------------------------------
-DEFAULT_ENGINEERED_IN = (
-    PROJECT_ROOT / "data" / "features" / "Dades_pellet_engineered.parquet"
-)
+DEFAULT_ENGINEERED_IN = FEATURES_DIR / "Dades_pellet_engineered.parquet"
 
 # --- Master ---------------------------------------------------------------
-MASTER_DIR = PROJECT_ROOT / "data" / "datasets" / "master"
+MASTER_DIR = DATASETS_DIR / "master"
 DEFAULT_MASTER_OUT = MASTER_DIR / "master_dataset.parquet"
 DEFAULT_MASTER_REPORT_JSON = MASTER_DIR / "master_dataset_report.json"
 DEFAULT_MASTER_REPORT_MD = MASTER_DIR / "master_dataset_report.md"
-DEFAULT_SCHEMA_LOCK = MASTER_DIR / "schema_lock.json"
+# Schema-lock contract lives under version-controlled configs/, NOT under the
+# git-ignored data/ tree, so the column-drift check compares against a tracked
+# file. Refresh it with ``run_datasets.py --write-schema-lock`` and commit.
+DEFAULT_SCHEMA_LOCK = CONFIGS_DIR / "schema_lock.json"
 
 # --- Specialized ----------------------------------------------------------
-SPECIALIZED_DIR = PROJECT_ROOT / "data" / "datasets" / "specialized"
+SPECIALIZED_DIR = DATASETS_DIR / "specialized"
 
 DEFAULT_ANOMALY_OUT = SPECIALIZED_DIR / "anomaly_detection_dataset.parquet"
-DEFAULT_ANOMALY_REPORT_JSON = (
-    SPECIALIZED_DIR / "anomaly_detection_dataset_report.json"
-)
-DEFAULT_ANOMALY_REPORT_MD = (
-    SPECIALIZED_DIR / "anomaly_detection_dataset_report.md"
-)
+DEFAULT_ANOMALY_REPORT_JSON = SPECIALIZED_DIR / "anomaly_detection_dataset_report.json"
+DEFAULT_ANOMALY_REPORT_MD = SPECIALIZED_DIR / "anomaly_detection_dataset_report.md"
 
 DEFAULT_FORECASTING_OUT = SPECIALIZED_DIR / "forecasting_dataset.parquet"
-DEFAULT_FORECASTING_REPORT_JSON = (
-    SPECIALIZED_DIR / "forecasting_dataset_report.json"
-)
-DEFAULT_FORECASTING_REPORT_MD = (
-    SPECIALIZED_DIR / "forecasting_dataset_report.md"
-)
+DEFAULT_FORECASTING_REPORT_JSON = SPECIALIZED_DIR / "forecasting_dataset_report.json"
+DEFAULT_FORECASTING_REPORT_MD = SPECIALIZED_DIR / "forecasting_dataset_report.md"
 
 DEFAULT_ENERGY_OUT = SPECIALIZED_DIR / "energy_dataset.parquet"
 DEFAULT_ENERGY_REPORT_JSON = SPECIALIZED_DIR / "energy_dataset_report.json"

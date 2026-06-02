@@ -6,11 +6,11 @@ the time-series and feature-engineering stages), apply the real policy
 from ``configs/specialized_datasets.yaml`` and assert the projection
 picks the right family of columns.
 """
+
 from __future__ import annotations
 
 import pandas as pd
 import pytest
-
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.datasets import (
     anomaly_projection,
@@ -86,7 +86,9 @@ def master_like(groups: ColumnGroups) -> pd.DataFrame:
 
 
 def test_anomaly_projection_picks_local_deviation_features(
-    master_like, datasets_policy: SpecializedDatasetsPolicy, groups,
+    master_like,
+    datasets_policy: SpecializedDatasetsPolicy,
+    groups,
 ):
     df, _ = anomaly_projection.run(master_like, datasets_policy, groups)
     selected = set(df.columns)
@@ -116,7 +118,9 @@ def test_anomaly_projection_picks_local_deviation_features(
 
 
 def test_forecasting_projection_picks_predictive_structure(
-    master_like, datasets_policy: SpecializedDatasetsPolicy, groups,
+    master_like,
+    datasets_policy: SpecializedDatasetsPolicy,
+    groups,
 ):
     df, _ = forecasting_projection.run(master_like, datasets_policy, groups)
     selected = set(df.columns)
@@ -139,7 +143,9 @@ def test_forecasting_projection_picks_predictive_structure(
 
 
 def test_energy_projection_picks_energy_and_load_context(
-    master_like, datasets_policy: SpecializedDatasetsPolicy, groups,
+    master_like,
+    datasets_policy: SpecializedDatasetsPolicy,
+    groups,
 ):
     df, _ = energy_projection.run(master_like, datasets_policy, groups)
     selected = set(df.columns)

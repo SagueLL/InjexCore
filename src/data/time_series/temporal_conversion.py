@@ -6,6 +6,7 @@ stage exists so the pipeline is self-sufficient: if the loader did the
 parsing already we no-op (a ``NORMAL`` audit finding records that fact);
 otherwise we coerce and surface an ``AWARE`` finding.
 """
+
 from __future__ import annotations
 
 import pandas as pd

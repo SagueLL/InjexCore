@@ -1,12 +1,11 @@
 """Unit tests for ``src.data.cleaning.physical_ranges``."""
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-import numpy as np
 import pandas as pd
 import pytest
-
 from src.data.cleaning import physical_ranges
 from src.data.cleaning.column_groups import ColumnGroups
 from src.data.cleaning.policy import Bound, CleaningPolicy
@@ -40,8 +39,7 @@ def test_critical_bound_masks_to_nan(
     df.loc[4, column] = bad_value
     findings = physical_ranges.detect(df, policy, groups)
     oob = [
-        f for f in findings
-        if f.finding_type == "out_of_range" and f.column == column
+        f for f in findings if f.finding_type == "out_of_range" and f.column == column
     ]
     assert len(oob) == 1
     assert oob[0].severity.value == "critical"
@@ -98,7 +96,8 @@ def test_integer_column_flags_fractional_values(
     df.loc[3, "granulator_g2_running"] = 0.5  # in range but fractional
     findings = physical_ranges.detect(df, policy, groups)
     frac = [
-        f for f in findings
+        f
+        for f in findings
         if f.finding_type == "non_integer_in_integer_column"
         and f.column == "granulator_g2_running"
     ]

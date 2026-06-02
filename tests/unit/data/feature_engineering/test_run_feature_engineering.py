@@ -1,5 +1,6 @@
 """Orchestrator smoke test: the feature engineering pipeline produces an
 engineered matrix and a report."""
+
 from __future__ import annotations
 
 import json
@@ -7,7 +8,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from src.data.feature_engineering import run_feature_engineering
 from src.data.time_series import run_ts_engineering
 
@@ -24,12 +24,18 @@ def features_parquet(tiny_frame_factory, project_root, tmp_path: Path) -> Path:
     out_parquet = tmp_path / "features.parquet"
     rc = run_ts_engineering.main(
         [
-            "--clean", str(clean),
-            "--classification", str(project_root / "data" / "features" / "variable_classification.csv"),
-            "--policy", str(project_root / "configs" / "time_series.yaml"),
-            "--out-parquet", str(out_parquet),
-            "--out-json", str(tmp_path / "ts_report.json"),
-            "--out-md", str(tmp_path / "ts_report.md"),
+            "--clean",
+            str(clean),
+            "--classification",
+            str(project_root / "data" / "features" / "variable_classification.csv"),
+            "--policy",
+            str(project_root / "configs" / "time_series.yaml"),
+            "--out-parquet",
+            str(out_parquet),
+            "--out-json",
+            str(tmp_path / "ts_report.json"),
+            "--out-md",
+            str(tmp_path / "ts_report.md"),
         ]
     )
     assert rc == 0
@@ -40,7 +46,10 @@ def features_parquet(tiny_frame_factory, project_root, tmp_path: Path) -> Path:
 def test_run_produces_expected_schema(features_parquet, project_root):
     df, findings = run_feature_engineering.run(
         features_path=features_parquet,
-        classification=project_root / "data" / "features" / "variable_classification.csv",
+        classification=project_root
+        / "data"
+        / "features"
+        / "variable_classification.csv",
         policy_path=project_root / "configs" / "feature_engineering.yaml",
     )
 
@@ -79,7 +88,9 @@ def test_run_produces_expected_schema(features_parquet, project_root):
 
     # Findings list non-empty and dominated by NORMAL audit records.
     assert findings
-    normal_pct = sum(1 for f in findings if f.severity.value == "normal") / len(findings)
+    normal_pct = sum(1 for f in findings if f.severity.value == "normal") / len(
+        findings
+    )
     assert normal_pct > 0.8
 
 
@@ -90,12 +101,18 @@ def test_main_writes_artifacts(features_parquet, project_root, tmp_path):
 
     rc = run_feature_engineering.main(
         [
-            "--features", str(features_parquet),
-            "--classification", str(project_root / "data" / "features" / "variable_classification.csv"),
-            "--policy", str(project_root / "configs" / "feature_engineering.yaml"),
-            "--out-parquet", str(out_parquet),
-            "--out-json", str(out_json),
-            "--out-md", str(out_md),
+            "--features",
+            str(features_parquet),
+            "--classification",
+            str(project_root / "data" / "features" / "variable_classification.csv"),
+            "--policy",
+            str(project_root / "configs" / "feature_engineering.yaml"),
+            "--out-parquet",
+            str(out_parquet),
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
         ]
     )
     assert rc == 0
@@ -125,12 +142,18 @@ def test_no_write_skips_parquet(features_parquet, project_root, tmp_path):
 
     rc = run_feature_engineering.main(
         [
-            "--features", str(features_parquet),
-            "--classification", str(project_root / "data" / "features" / "variable_classification.csv"),
-            "--policy", str(project_root / "configs" / "feature_engineering.yaml"),
-            "--out-parquet", str(out_parquet),
-            "--out-json", str(out_json),
-            "--out-md", str(out_md),
+            "--features",
+            str(features_parquet),
+            "--classification",
+            str(project_root / "data" / "features" / "variable_classification.csv"),
+            "--policy",
+            str(project_root / "configs" / "feature_engineering.yaml"),
+            "--out-parquet",
+            str(out_parquet),
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
             "--no-write",
         ]
     )

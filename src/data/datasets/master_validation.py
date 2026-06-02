@@ -11,11 +11,13 @@ downstream model family:
   ``max_nan_fraction_per_column``); breaches surface as ``IMPORTANT``
   findings so downstream selectors can decide whether to drop the
   column.
-* Optional schema lock: when ``schema_lock`` is true and a
-  ``schema_lock.json`` snapshot exists next to the master parquet,
-  added / removed columns and dtype changes are reported as ``AWARE``.
+* Optional schema lock: when ``schema_lock`` is true and a tracked
+  ``configs/schema_lock.json`` snapshot exists, added / removed columns
+  and dtype changes are reported as ``AWARE``. Refresh the lock with
+  ``run_datasets.py --write-schema-lock``.
 * Optional drop list (e.g. ``drift`` from the synthetic generator).
 """
+
 from __future__ import annotations
 
 import json
@@ -31,7 +33,10 @@ CHECK_NAME = "master_validation"
 
 
 def _check_timestamps(
-    df: pd.DataFrame, *, require_monotonic: bool, require_unique: bool,
+    df: pd.DataFrame,
+    *,
+    require_monotonic: bool,
+    require_unique: bool,
 ) -> list[Finding]:
     findings: list[Finding] = []
     if isinstance(df.index, pd.DatetimeIndex):
@@ -93,7 +98,8 @@ def _check_timestamps(
 
 
 def _check_nan_budget(
-    df: pd.DataFrame, max_fraction: float,
+    df: pd.DataFrame,
+    max_fraction: float,
 ) -> list[Finding]:
     if df.empty:
         return []
@@ -119,7 +125,8 @@ def _check_nan_budget(
 
 
 def _drop_columns(
-    df: pd.DataFrame, drop: list[str],
+    df: pd.DataFrame,
+    drop: list[str],
 ) -> tuple[pd.DataFrame, list[Finding]]:
     findings: list[Finding] = []
     if not drop:
@@ -153,7 +160,8 @@ def _drop_columns(
 
 
 def _check_schema_lock(
-    df: pd.DataFrame, schema_path: Path,
+    df: pd.DataFrame,
+    schema_path: Path,
 ) -> list[Finding]:
     if not schema_path.exists():
         return [
@@ -222,6 +230,25 @@ def _check_schema_lock(
             )
         )
     return findings
+
+
+def write_schema_lock(df: pd.DataFrame, path: Path) -> None:
+    """Snapshot the master ``{column: dtype}`` schema to a tracked JSON lock.
+
+    The format matches what :func:`_check_schema_lock` reads back: a
+    ``columns`` map of column name to pandas dtype string. Commit the
+    resulting ``configs/schema_lock.json`` so the column-drift check has a
+    version-controlled contract to compare future runs against.
+    """
+    snapshot = {
+        "columns": {c: str(df[c].dtype) for c in df.columns},
+        "n_columns": int(df.shape[1]),
+        "generated_by": "run_datasets.py --write-schema-lock",
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(snapshot, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def run(

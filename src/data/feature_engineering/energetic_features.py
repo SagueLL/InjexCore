@@ -21,8 +21,9 @@ recorded as ``%`` of nominal load, not kW. Treating them as kW for the
 purposes of ``cumkwh`` therefore yields ``%·h`` rather than physical
 kilowatt-hours. The feature is still useful as a *load-time integral* —
 downstream code that needs physical units can multiply by the nominal
-rating. This caveat is documented in ``docs/feature_engineering.md``.
+rating. This caveat is documented in ``docs/pipeline/feature_engineering.md``.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -144,7 +145,7 @@ def detect(
                 action_taken="noop",
                 evidence={
                     "note": "per-cycle features requested but not implemented "
-                            "for this dataset (no cycle marker)",
+                    "for this dataset (no cycle marker)",
                     "cycle_id_column": p.per_cycle.cycle_id_column,
                 },
             )
@@ -178,13 +179,17 @@ def _rolling_energy_per_kg(
 ) -> pd.Series:
     # Power in % or kW × dt(h) → kWh per sample. Sum over the window.
     power_sum = (power.fillna(0).astype(float)).rolling(
-        window=window, min_periods=min_periods, closed=closed,
+        window=window,
+        min_periods=min_periods,
+        closed=closed,
     ).sum() * dt_hours
     # production_rate is kg/min; per-sample kg = production × (dt_hours × 60).
     sample_period_min = dt_hours * 60.0
     prod_kg = production.fillna(0).astype(float) * sample_period_min
     prod_sum = prod_kg.rolling(
-        window=window, min_periods=min_periods, closed=closed,
+        window=window,
+        min_periods=min_periods,
+        closed=closed,
     ).sum()
     return pd.Series(
         np.where(prod_sum.abs() < eps, np.nan, power_sum / prod_sum),
@@ -214,7 +219,8 @@ def apply(
             reset = f.evidence.get("reset", "none")
             if reset == "daily":
                 new_cols[f"{col}_cumkwh_day"] = _cumulative_energy_daily(
-                    df[col], dt_hours,
+                    df[col],
+                    dt_hours,
                 )
             else:
                 new_cols[f"{col}_cumkwh"] = _cumulative_energy(df[col], dt_hours)
@@ -229,7 +235,13 @@ def apply(
             dt_hours = float(f.evidence["dt_hours"])
             eps = float(f.evidence.get("epsilon", 1.0e-6))
             new_cols[f"{col}_energy_per_kg_{w}"] = _rolling_energy_per_kg(
-                df[col], df[prod_col], w, closed, min_periods, dt_hours, eps,
+                df[col],
+                df[prod_col],
+                w,
+                closed,
+                min_periods,
+                dt_hours,
+                eps,
             )
 
     if not new_cols:

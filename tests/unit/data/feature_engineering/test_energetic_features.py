@@ -1,9 +1,9 @@
 """Family 4 — energetic features."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.feature_engineering import energetic_features
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
 
@@ -56,7 +56,7 @@ def test_cumulative_energy_daily_resets(tiny_frame_factory, fe_policy, groups):
 
 def test_energy_per_kg_window(tiny_frame_factory, fe_policy, groups):
     df = _indexed(tiny_frame_factory, n=80)
-    df["granulator_power"] = 60.0          # constant power %
+    df["granulator_power"] = 60.0  # constant power %
     df["granulator_production_rate"] = 10.0  # kg/min
 
     findings = energetic_features.detect(df, fe_policy, groups)

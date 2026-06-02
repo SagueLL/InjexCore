@@ -9,6 +9,7 @@ Five rules from the plan:
 
 ``apply`` is a no-op so the orchestrator can call every module uniformly.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -57,7 +58,8 @@ def apply(
 
 
 def _rule_off_with_production(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     cols = {"granulator_g2_running", "granulator_production_rate"}
     if not cols.issubset(df.columns):
@@ -70,33 +72,38 @@ def _rule_off_with_production(
 
 
 def _rule_on_with_low_power(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     cols = {"granulator_g2_running", "granulator_power"}
     if not cols.issubset(df.columns):
         return []
     mask = (df["granulator_g2_running"].fillna(0) == 1) & (
-        df["granulator_power"].fillna(100)
-        < policy.state_consistency.min_power_pct
+        df["granulator_power"].fillna(100) < policy.state_consistency.min_power_pct
     )
     return _row_finding(mask, "on_with_low_power", "granulator_power")
 
 
 def _rule_alarm_off_but_hot(
-    df: pd.DataFrame, policy: CleaningPolicy, groups: ColumnGroups,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
+    groups: ColumnGroups,
 ) -> list[Finding]:
     alarm_cols = [c for c in groups.alarm_flags if c in df.columns]
     temp_cols = [c for c in groups.temperature_cols if c in df.columns]
     if not alarm_cols or not temp_cols:
         return []
     any_alarm = df[alarm_cols].fillna(0).sum(axis=1) > 0
-    hot = (df[temp_cols] > policy.state_consistency.hot_temperature_threshold_c).any(axis=1)
+    hot = (df[temp_cols] > policy.state_consistency.hot_temperature_threshold_c).any(
+        axis=1
+    )
     mask = (~any_alarm) & hot
     return _row_finding(mask, "alarm_off_but_hot", column=None)
 
 
 def _rule_alarm_persistent_run(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     findings: list[Finding] = []
     window = policy.state_consistency.alarm_shutdown_window_min
@@ -108,7 +115,10 @@ def _rule_alarm_persistent_run(
 
 
 def _alarm_persistent_for_pair(
-    df: pd.DataFrame, alarm_col: str, running_col: str, window: int,
+    df: pd.DataFrame,
+    alarm_col: str,
+    running_col: str,
+    window: int,
 ) -> list[Finding]:
     alarm = df[alarm_col].fillna(0).to_numpy()
     running = df[running_col].fillna(0).to_numpy()
@@ -126,22 +136,25 @@ def _alarm_persistent_for_pair(
                 off_after += 1
             j += 1
         if off_after > window:
-            findings.append(Finding(
-                check="state_consistency",
-                severity=Severity.AWARE,
-                finding_type="alarm_with_extended_shutdown",
-                column=alarm_col,
-                row_range=(int(i), int(j - 1)),
-                count=off_after,
-                action_taken="tag_only",
-                evidence={"running_col": running_col, "off_minutes": off_after},
-            ))
+            findings.append(
+                Finding(
+                    check="state_consistency",
+                    severity=Severity.AWARE,
+                    finding_type="alarm_with_extended_shutdown",
+                    column=alarm_col,
+                    row_range=(int(i), int(j - 1)),
+                    count=off_after,
+                    action_taken="tag_only",
+                    evidence={"running_col": running_col, "off_minutes": off_after},
+                )
+            )
         i = j
     return findings
 
 
 def _rule_sp_pv_drift(
-    df: pd.DataFrame, policy: CleaningPolicy,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
 ) -> list[Finding]:
     findings: list[Finding] = []
     threshold = policy.state_consistency.sp_pv_max_drift_pct / 100.0
@@ -154,32 +167,42 @@ def _rule_sp_pv_drift(
 
 
 def _sp_pv_for_pair(
-    df: pd.DataFrame, sp_col: str, pv_col: str, threshold: float, min_run: int,
+    df: pd.DataFrame,
+    sp_col: str,
+    pv_col: str,
+    threshold: float,
+    min_run: int,
 ) -> list[Finding]:
     sp = df[sp_col]
     pv = df[pv_col]
     valid = sp.notna() & pv.notna() & (sp.abs() > 1e-9)
     drift_ratio = (sp - pv).abs() / sp.abs().replace(0, pd.NA)
     over = (drift_ratio > threshold) & valid
-    return _run_findings(over, "sp_pv_drift", sp_col, min_run, evidence_extra={"pv_col": pv_col})
+    return _run_findings(
+        over, "sp_pv_drift", sp_col, min_run, evidence_extra={"pv_col": pv_col}
+    )
 
 
 def _row_finding(
-    mask: pd.Series, finding_type: str, column: str | None,
+    mask: pd.Series,
+    finding_type: str,
+    column: str | None,
 ) -> list[Finding]:
     if not mask.any():
         return []
     rows = [int(i) for i in mask[mask].index.tolist()]
-    return [Finding(
-        check="state_consistency",
-        severity=Severity.IMPORTANT,
-        finding_type=finding_type,
-        column=column,
-        row_range=(rows[0], rows[-1]),
-        count=len(rows),
-        action_taken="tag_only",
-        evidence={"rows": rows[:50]},
-    )]
+    return [
+        Finding(
+            check="state_consistency",
+            severity=Severity.IMPORTANT,
+            finding_type=finding_type,
+            column=column,
+            row_range=(rows[0], rows[-1]),
+            count=len(rows),
+            action_taken="tag_only",
+            evidence={"rows": rows[:50]},
+        )
+    ]
 
 
 def _run_findings(
@@ -206,15 +229,17 @@ def _run_findings(
             ev: dict[str, object] = {"length": int(run_len)}
             if evidence_extra:
                 ev.update(evidence_extra)
-            findings.append(Finding(
-                check="state_consistency",
-                severity=Severity.AWARE,
-                finding_type=finding_type,
-                column=column,
-                row_range=(int(idx[i]), int(idx[j - 1])),
-                count=int(run_len),
-                action_taken="tag_only",
-                evidence=ev,
-            ))
+            findings.append(
+                Finding(
+                    check="state_consistency",
+                    severity=Severity.AWARE,
+                    finding_type=finding_type,
+                    column=column,
+                    row_range=(int(idx[i]), int(idx[j - 1])),
+                    count=int(run_len),
+                    action_taken="tag_only",
+                    evidence=ev,
+                )
+            )
         i = j
     return findings

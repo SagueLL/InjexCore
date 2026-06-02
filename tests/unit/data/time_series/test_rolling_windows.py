@@ -1,9 +1,9 @@
 """Stage 4 — rolling-window features."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.time_series import rolling_windows
 from src.data.time_series.policy import TimeSeriesPolicy
 

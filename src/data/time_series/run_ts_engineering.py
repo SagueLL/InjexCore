@@ -17,6 +17,7 @@ Outputs:
     data/features/ts_engineering_report.json
     data/features/ts_engineering_report.md
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,6 +28,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import CONFIGS_DIR, FEATURES_DIR
 from src.data.time_series import (
     resampling,
     rolling_windows,
@@ -45,10 +47,9 @@ from src.data.time_series.io import (
 from src.data.time_series.policy import TimeSeriesPolicy, load_policy
 from src.data.time_series.reporting import Finding, write_json, write_markdown
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_POLICY = PROJECT_ROOT / "configs" / "time_series.yaml"
-DEFAULT_REPORT_JSON = PROJECT_ROOT / "data" / "features" / "ts_engineering_report.json"
-DEFAULT_REPORT_MD = PROJECT_ROOT / "data" / "features" / "ts_engineering_report.md"
+DEFAULT_POLICY = CONFIGS_DIR / "time_series.yaml"
+DEFAULT_REPORT_JSON = FEATURES_DIR / "ts_engineering_report.json"
+DEFAULT_REPORT_MD = FEATURES_DIR / "ts_engineering_report.md"
 
 PIPELINE = [
     ("temporal_conversion", temporal_conversion),
@@ -99,7 +100,9 @@ def run(
     df = load_clean(clean_csv)
     log.info(
         "Loaded %d rows x %d cols in %.1fs",
-        len(df), df.shape[1], time.perf_counter() - t0,
+        len(df),
+        df.shape[1],
+        time.perf_counter() - t0,
     )
 
     groups = load_groups(classification)
@@ -112,7 +115,10 @@ def run(
         all_findings.extend(findings)
         log.info(
             "Stage %-20s: %4d findings (%.1fs); shape now %s",
-            name, len(findings), time.perf_counter() - t0, df.shape,
+            name,
+            len(findings),
+            time.perf_counter() - t0,
+            df.shape,
         )
     return df, all_findings
 
@@ -137,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         log.info(
             "Writing feature matrix → %s (%d rows x %d cols)",
-            args.out_parquet, len(df), df.shape[1],
+            args.out_parquet,
+            len(df),
+            df.shape[1],
         )
         write_features(df, args.out_parquet, args.out_csv)
 

@@ -1,4 +1,5 @@
 """Master-validation integrity pass."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 from src.data.datasets import master_validation
 from src.data.datasets.policy import (
     MasterValidationPolicy,
@@ -70,12 +70,12 @@ def test_drop_columns_removes_listed_names(groups):
     df = _frame()
     df["drift"] = 1.0
     out, findings = master_validation.run(
-        df, _policy(schema_lock=False, drop_columns=["drift", "missing"]), groups,
+        df,
+        _policy(schema_lock=False, drop_columns=["drift", "missing"]),
+        groups,
     )
     assert "drift" not in out.columns
-    drop_finding = next(
-        f for f in findings if f.finding_type == "dropped_columns"
-    )
+    drop_finding = next(f for f in findings if f.finding_type == "dropped_columns")
     assert drop_finding.evidence["columns"] == ["drift"]
     skip = [f for f in findings if f.finding_type == "drop_skipped"]
     assert skip and skip[0].column == "missing"
@@ -85,7 +85,9 @@ def test_schema_lock_bootstraps_when_missing(groups, tmp_path: Path):
     df = _frame()
     snapshot = tmp_path / "schema_lock.json"
     out, findings = master_validation.run(
-        df, _policy(schema_lock=True), groups,
+        df,
+        _policy(schema_lock=True),
+        groups,
         schema_lock_path=snapshot,
     )
     types = {f.finding_type for f in findings}
@@ -102,7 +104,9 @@ def test_schema_lock_detects_drift(groups, tmp_path: Path):
     df["added_col"] = 1.0
     df["x"] = df["x"].astype("float64")
     _, findings = master_validation.run(
-        df, _policy(schema_lock=True), groups,
+        df,
+        _policy(schema_lock=True),
+        groups,
         schema_lock_path=snapshot,
     )
     types = {f.finding_type for f in findings}
@@ -114,7 +118,9 @@ def test_disabled_pass_returns_frame_unchanged(groups):
     df = _frame()
     df["drift"] = 1.0
     out, findings = master_validation.run(
-        df, _policy(enabled=False, drop_columns=["drift"]), groups,
+        df,
+        _policy(enabled=False, drop_columns=["drift"]),
+        groups,
     )
     assert "drift" in out.columns
     assert len(findings) == 1 and findings[0].finding_type == "skipped"

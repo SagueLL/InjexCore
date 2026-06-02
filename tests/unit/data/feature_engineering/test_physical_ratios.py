@@ -1,9 +1,9 @@
 """Family 3 — physical ratios."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from src.data.feature_engineering import physical_ratios
 from src.data.feature_engineering.policy import FeatureEngineeringPolicy
 
@@ -64,9 +64,9 @@ def test_missing_input_yields_important_finding(tiny_frame_factory, fe_policy, g
     df = _indexed(tiny_frame_factory).drop(columns=["granulator_production_rate"])
     findings = physical_ratios.detect(df, fe_policy, groups)
     important = [
-        f for f in findings
-        if f.finding_type == "ratio_missing_input"
-        and f.severity.value == "important"
+        f
+        for f in findings
+        if f.finding_type == "ratio_missing_input" and f.severity.value == "important"
     ]
     assert important
 
@@ -98,8 +98,7 @@ def test_high_nan_rate_surfaces_aware_finding(tiny_frame_factory, groups):
     physical_ratios.apply(df, findings, policy, groups)
 
     assert any(
-        f.finding_type == "ratio_high_nan_rate"
-        and f.severity.value == "aware"
+        f.finding_type == "ratio_high_nan_rate" and f.severity.value == "aware"
         for f in findings
     )
 

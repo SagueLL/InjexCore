@@ -23,6 +23,7 @@ statistics cannot express:
                                      running)`` per sample — inconsistent
                                      operational state.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -246,13 +247,17 @@ def apply(
     def _or_running() -> pd.Series:
         nonlocal or_running_cache
         if or_running_cache is None:
-            or_running_cache = _any_flag(df, _present(df, policy.operative_features.running_flags))
+            or_running_cache = _any_flag(
+                df, _present(df, policy.operative_features.running_flags)
+            )
         return or_running_cache
 
     def _or_alarm() -> pd.Series:
         nonlocal or_alarm_cache
         if or_alarm_cache is None:
-            or_alarm_cache = _any_flag(df, _present(df, policy.operative_features.alarm_flags))
+            or_alarm_cache = _any_flag(
+                df, _present(df, policy.operative_features.alarm_flags)
+            )
         return or_alarm_cache
 
     def _any_alarm_edges() -> pd.Series:
@@ -274,7 +279,9 @@ def apply(
             continue
         ft = f.finding_type
         if ft == "time_since_machine_off":
-            new_cols["time_since_machine_off"] = _time_since_last_rising_edge(_or_running())
+            new_cols["time_since_machine_off"] = _time_since_last_rising_edge(
+                _or_running()
+            )
         elif ft == "n_subsystems_running":
             present = _present(df, policy.operative_features.running_flags)
             if present:
@@ -287,15 +294,21 @@ def apply(
             w = int(f.evidence["window"])
             closed = f.evidence.get("closed", "left")
             min_periods = int(f.evidence.get("min_periods", _min_periods(w)))
-            new_cols[f"total_alarms_{w}"] = _any_alarm_edges().rolling(
-                window=w, min_periods=min_periods, closed=closed,
-            ).sum()
+            new_cols[f"total_alarms_{w}"] = (
+                _any_alarm_edges()
+                .rolling(
+                    window=w,
+                    min_periods=min_periods,
+                    closed=closed,
+                )
+                .sum()
+            )
         elif ft == "time_since_any_alarm":
             new_cols["time_since_any_alarm"] = _time_since_last_active(_or_alarm())
         elif ft == "any_alarm_while_running":
             new_cols["any_alarm_while_running"] = (
-                ((_or_alarm() > 0) & (_or_running() > 0)).astype("int8")
-            )
+                (_or_alarm() > 0) & (_or_running() > 0)
+            ).astype("int8")
 
     if not new_cols:
         return df

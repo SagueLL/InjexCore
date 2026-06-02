@@ -11,6 +11,7 @@ Boundary with ``src/models/``: fitted estimators (Isolation Forest, LOF,
 Mahalanobis with a covariance fit) are deliberately out of scope; they
 belong in :mod:`src.models.anomaly`.
 """
+
 from src.data.feature_engineering.reporting import Finding, Severity
 
 __all__ = ["Finding", "Severity"]

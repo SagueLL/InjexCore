@@ -27,6 +27,7 @@ Findings emitted
   change upstream).
 * ``IMPORTANT`` — when the resulting projection is empty.
 """
+
 from __future__ import annotations
 
 import re
@@ -55,7 +56,9 @@ def _match_patterns(columns: list[str], patterns: list[str]) -> set[str]:
 
 
 def _category_columns(
-    columns: list[str], groups: ColumnGroups, categories: list[str],
+    columns: list[str],
+    groups: ColumnGroups,
+    categories: list[str],
 ) -> set[str]:
     if not categories:
         return set()
@@ -124,9 +127,7 @@ def select_columns(
             selected.add("timestamp")
 
     exclude_pattern_hits = _match_patterns(columns, spec.exclude_patterns)
-    exclude_explicit_present = [
-        c for c in spec.exclude_columns if c in present_columns
-    ]
+    exclude_explicit_present = [c for c in spec.exclude_columns if c in present_columns]
     exclude_explicit_missing = [
         c for c in spec.exclude_columns if c not in present_columns
     ]

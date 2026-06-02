@@ -1,8 +1,7 @@
-"""Shared pytest fixtures for InjexCore cleaning-module unit tests.
+"""Shared pytest fixtures for the InjexCore data-layer unit tests.
 
-The cleaning package imports its sibling modules as ``src.data.cleaning.*``,
-which means the project root must be on ``sys.path``. We inject it here so
-all tests can run without relying on an installed package.
+The package is installed in editable mode (``pip install -e .``), so
+``import src...`` resolves without any ``sys.path`` manipulation here.
 
 Fixtures intentionally use the *real* policy YAML and the *real* variable
 classification CSV: they are small, version-controlled artefacts whose
@@ -11,32 +10,34 @@ contents are part of the contract the modules are tested against.
 Synthetic DataFrames are built by the ``tiny_frame_factory`` fixture so no
 test reads the large raw dataset from disk.
 """
+
 from __future__ import annotations
 
-import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pandas as pd
 import pytest
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.data.cleaning.column_groups import ColumnGroups, load_groups  # noqa: E402
-from src.data.cleaning.policy import CleaningPolicy, load_policy  # noqa: E402
-from src.data.datasets.policy import (  # noqa: E402
+from src.config import PROJECT_ROOT
+from src.data._common.column_groups import ColumnGroups, load_groups
+from src.data.cleaning.policy import CleaningPolicy, load_policy
+from src.data.datasets.policy import (
     SpecializedDatasetsPolicy,
+)
+from src.data.datasets.policy import (
     load_policy as load_datasets_policy,
 )
-from src.data.feature_engineering.policy import (  # noqa: E402
+from src.data.feature_engineering.policy import (
     FeatureEngineeringPolicy,
+)
+from src.data.feature_engineering.policy import (
     load_policy as load_fe_policy,
 )
-from src.data.time_series.policy import (  # noqa: E402
+from src.data.time_series.policy import (
     TimeSeriesPolicy,
+)
+from src.data.time_series.policy import (
     load_policy as load_ts_policy,
 )
 
@@ -55,7 +56,9 @@ def policy() -> CleaningPolicy:
 @pytest.fixture(scope="session")
 def groups() -> ColumnGroups:
     """Real column groups loaded from variable_classification.csv."""
-    return load_groups(PROJECT_ROOT / "data" / "features" / "variable_classification.csv")
+    return load_groups(
+        PROJECT_ROOT / "data" / "features" / "variable_classification.csv"
+    )
 
 
 @pytest.fixture(scope="session")
@@ -73,9 +76,7 @@ def fe_policy() -> FeatureEngineeringPolicy:
 @pytest.fixture(scope="session")
 def datasets_policy() -> SpecializedDatasetsPolicy:
     """Real specialized-datasets policy loaded from configs/specialized_datasets.yaml."""
-    return load_datasets_policy(
-        PROJECT_ROOT / "configs" / "specialized_datasets.yaml"
-    )
+    return load_datasets_policy(PROJECT_ROOT / "configs" / "specialized_datasets.yaml")
 
 
 _BASE_TS = pd.Timestamp("2025-01-01 00:00:00")
@@ -128,7 +129,9 @@ def tiny_frame_factory(
         start: pd.Timestamp = _BASE_TS,
     ) -> pd.DataFrame:
         timestamps = pd.date_range(
-            start=start, periods=n_rows, freq=pd.Timedelta(seconds=period_s),
+            start=start,
+            periods=n_rows,
+            freq=pd.Timedelta(seconds=period_s),
         )
         data: dict[str, list[object]] = {}
         for col in groups.all_columns:

@@ -14,7 +14,13 @@ Usage::
     python -m src.preprocessing --stage features # cleaning + ts + fe
     python -m src.preprocessing --stage datasets # specialized datasets only
     python -m src.preprocessing --stage all      # cleaning + ts + fe + datasets
+
+The chained stages (``features`` / ``all``) forward only the universal flags
+``--no-write`` and ``--log-level`` to every stage. Stage-specific flags
+(``--raw``, ``--clean``, ``--out-parquet`` ...) differ per stage and are
+rejected in chained mode — run a single ``--stage`` to use them.
 """
+
 from __future__ import annotations
 
 import sys
@@ -41,6 +47,28 @@ __all__ = [
 ]
 
 _STAGES = ("cleaning", "ts", "fe", "features", "datasets", "all")
+# Stages that fan the same argv out to multiple sub-stage parsers.
+_CHAIN_STAGES = ("features", "all")
+# Flags every stage's argparse understands, safe to forward in a chain.
+_UNIVERSAL_FLAGS = ("--no-write", "--log-level")
+
+
+def _first_non_universal(rest: list[str]) -> str | None:
+    """Return the first token in ``rest`` that is not a universal flag.
+
+    Used to reject stage-specific flags in chained modes, where the same
+    ``rest`` is handed to every sub-stage parser and a flag understood by
+    one stage would crash another. ``--log-level`` consumes its value.
+    """
+    it = iter(rest)
+    for tok in it:
+        if tok == "--no-write" or tok.startswith("--log-level="):
+            continue
+        if tok == "--log-level":
+            next(it, None)  # skip the level value
+            continue
+        return tok
+    return None
 
 
 def _split_stage_arg(argv: list[str]) -> tuple[str, list[str]]:
@@ -61,15 +89,21 @@ def _split_stage_arg(argv: list[str]) -> tuple[str, list[str]]:
         else:
             rest.append(tok)
     if stage not in _STAGES:
-        raise SystemExit(
-            f"Unknown --stage {stage!r}; expected one of {_STAGES}."
-        )
+        raise SystemExit(f"Unknown --stage {stage!r}; expected one of {_STAGES}.")
     return stage, rest
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:]) if argv is None else list(argv)
     stage, rest = _split_stage_arg(argv)
+    if stage in _CHAIN_STAGES:
+        offending = _first_non_universal(rest)
+        if offending is not None:
+            raise SystemExit(
+                f"Chained --stage {stage!r} only accepts the universal flags "
+                f"{_UNIVERSAL_FLAGS} (got {offending!r}). Stage-specific flags "
+                f"differ per stage; run a single --stage to use them."
+            )
     if stage == "cleaning":
         return cleaning_main(rest)
     if stage == "ts":

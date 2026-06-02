@@ -7,9 +7,9 @@ missing_by_design, continuous_sensor) using the rules in the plan.
 
 If a row's running flags are themselves NaN the row is critical → drop.
 """
+
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from src.data.cleaning.column_groups import ColumnGroups
@@ -47,7 +47,8 @@ def apply(
 
 
 def _detect_undeterminable_rows(
-    df: pd.DataFrame, groups: ColumnGroups,
+    df: pd.DataFrame,
+    groups: ColumnGroups,
 ) -> list[Finding]:
     running_present = [c for c in groups.running_flags if c in df.columns]
     if not running_present:
@@ -56,20 +57,24 @@ def _detect_undeterminable_rows(
     if not mask.any():
         return []
     rows = [int(i) for i in mask[mask].index.tolist()]
-    return [Finding(
-        check="missing_values",
-        severity=Severity.CRITICAL,
-        finding_type="undeterminable_state",
-        column=None,
-        row_range=(rows[0], rows[-1]),
-        count=len(rows),
-        action_taken="drop",
-        evidence={"rows": rows},
-    )]
+    return [
+        Finding(
+            check="missing_values",
+            severity=Severity.CRITICAL,
+            finding_type="undeterminable_state",
+            column=None,
+            row_range=(rows[0], rows[-1]),
+            count=len(rows),
+            action_taken="drop",
+            evidence={"rows": rows},
+        )
+    ]
 
 
 def _detect_nan_runs(
-    df: pd.DataFrame, policy: CleaningPolicy, groups: ColumnGroups,
+    df: pd.DataFrame,
+    policy: CleaningPolicy,
+    groups: ColumnGroups,
 ) -> list[Finding]:
     findings: list[Finding] = []
     process_set = set(groups.process)
@@ -84,10 +89,20 @@ def _detect_nan_runs(
         if not nan_mask.any():
             continue
         for start, end in _runs(nan_mask):
-            findings.append(_classify_run(
-                df, col, start, end, policy, groups,
-                process_set, mbd, running_present, alarm_present,
-            ))
+            findings.append(
+                _classify_run(
+                    df,
+                    col,
+                    start,
+                    end,
+                    policy,
+                    groups,
+                    process_set,
+                    mbd,
+                    running_present,
+                    alarm_present,
+                )
+            )
     return findings
 
 
@@ -125,39 +140,68 @@ def _classify_run(
     mv = policy.missing_values
 
     if col in mbd:
-        return _finding(col, start, end, length, Severity.NORMAL,
-                        "missing_by_design", "keep_nan")
+        return _finding(
+            col, start, end, length, Severity.NORMAL, "missing_by_design", "keep_nan"
+        )
 
     is_process = col in process_set
 
     if is_process and _machine_off(df, start, end, running_present):
-        return _finding(col, start, end, length, Severity.AWARE,
-                        "machine_off", "keep_nan")
+        return _finding(
+            col, start, end, length, Severity.AWARE, "machine_off", "keep_nan"
+        )
 
-    if is_process and _aligned_with_alarm(df, start, end, alarm_present,
-                                          mv.alarm_alignment_window_min):
-        return _finding(col, start, end, length, Severity.AWARE,
-                        "maintenance_window", "keep_nan")
+    if is_process and _aligned_with_alarm(
+        df, start, end, alarm_present, mv.alarm_alignment_window_min
+    ):
+        return _finding(
+            col, start, end, length, Severity.AWARE, "maintenance_window", "keep_nan"
+        )
 
-    if length > mv.broken_sensor_min_run and _any_running(df, start, end, running_present):
-        return _finding(col, start, end, length, Severity.CRITICAL,
-                        "broken_sensor", "tag_only")
+    if length > mv.broken_sensor_min_run and _any_running(
+        df, start, end, running_present
+    ):
+        return _finding(
+            col, start, end, length, Severity.CRITICAL, "broken_sensor", "tag_only"
+        )
 
-    if length <= mv.interpolation_max_run and _any_running(df, start, end, running_present):
-        return _finding(col, start, end, length, Severity.IMPORTANT,
-                        "lost_communication", "interpolate_time")
+    if length <= mv.interpolation_max_run and _any_running(
+        df, start, end, running_present
+    ):
+        return _finding(
+            col,
+            start,
+            end,
+            length,
+            Severity.IMPORTANT,
+            "lost_communication",
+            "interpolate_time",
+        )
 
     if length == 1 and is_process:
-        return _finding(col, start, end, length, Severity.IMPORTANT,
-                        "continuous_sensor", "forward_fill_1")
+        return _finding(
+            col,
+            start,
+            end,
+            length,
+            Severity.IMPORTANT,
+            "continuous_sensor",
+            "forward_fill_1",
+        )
 
-    return _finding(col, start, end, length, Severity.AWARE,
-                    "unclassified_nan", "keep_nan")
+    return _finding(
+        col, start, end, length, Severity.AWARE, "unclassified_nan", "keep_nan"
+    )
 
 
 def _finding(
-    col: str, start: int, end: int, length: int,
-    severity: Severity, finding_type: str, action: str,
+    col: str,
+    start: int,
+    end: int,
+    length: int,
+    severity: Severity,
+    finding_type: str,
+    action: str,
 ) -> Finding:
     return Finding(
         check="missing_values",
@@ -174,7 +218,10 @@ _MACHINE_OFF_FLAGS = ("granulator_g2_running", "feeder_al2_running")
 
 
 def _machine_off(
-    df: pd.DataFrame, start: int, end: int, running: list[str],
+    df: pd.DataFrame,
+    start: int,
+    end: int,
+    running: list[str],
 ) -> bool:
     present = [c for c in _MACHINE_OFF_FLAGS if c in df.columns]
     if len(present) != len(_MACHINE_OFF_FLAGS):
@@ -184,7 +231,10 @@ def _machine_off(
 
 
 def _any_running(
-    df: pd.DataFrame, start: int, end: int, running: list[str],
+    df: pd.DataFrame,
+    start: int,
+    end: int,
+    running: list[str],
 ) -> bool:
     if not running:
         return False
@@ -193,7 +243,11 @@ def _any_running(
 
 
 def _aligned_with_alarm(
-    df: pd.DataFrame, start: int, end: int, alarm_cols: list[str], window_min: int,
+    df: pd.DataFrame,
+    start: int,
+    end: int,
+    alarm_cols: list[str],
+    window_min: int,
 ) -> bool:
     if not alarm_cols:
         return False
@@ -209,7 +263,9 @@ def _aligned_with_alarm(
 
 
 def _apply_to_runs(
-    df: pd.DataFrame, findings: list[Finding], policy: CleaningPolicy,
+    df: pd.DataFrame,
+    findings: list[Finding],
+    policy: CleaningPolicy,
 ) -> pd.DataFrame:
     out = df
     limit = policy.missing_values.interpolation_max_run
@@ -227,7 +283,11 @@ def _apply_to_runs(
 
 
 def _interpolate_segment(
-    df: pd.DataFrame, col: str, start: int, end: int, limit: int,
+    df: pd.DataFrame,
+    col: str,
+    start: int,
+    end: int,
+    limit: int,
 ) -> pd.DataFrame:
     if "timestamp" not in df.columns:
         df[col] = df[col].interpolate(method="linear", limit=limit)

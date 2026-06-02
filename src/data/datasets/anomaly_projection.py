@@ -10,6 +10,7 @@ The actual selection rules live in
 key; this module is a thin wrapper around
 :func:`src.data.datasets.selectors.project`.
 """
+
 from __future__ import annotations
 
 import pandas as pd
