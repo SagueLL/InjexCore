@@ -84,10 +84,10 @@ split, and write to `models/reports/` separately.
 
 ```bash
 # Full run (writes engineered matrix + reports)
-python -m src.data.feature_engineering.run_feature_engineering
+python -m src.preprocessing.feature_engineering.run_feature_engineering
 
 # Diagnostic only — emit reports, skip the parquet write
-python -m src.data.feature_engineering.run_feature_engineering --no-write
+python -m src.preprocessing.feature_engineering.run_feature_engineering --no-write
 
 # Feature engineering only via the shim (assumes ts parquet exists)
 python -m src.preprocessing --stage fe
@@ -240,7 +240,7 @@ energetic_features:
 
 Pydantic enforces `extra="forbid"` so unknown keys fail loudly at
 startup. The aggregate schema lives in
-`src/data/feature_engineering/policy.py`.
+`src/preprocessing/feature_engineering/policy.py`.
 
 ---
 
@@ -361,7 +361,7 @@ The MD title is `Feature Engineering Report`.
 ## 12. Where things live
 
 ```
-src/data/feature_engineering/
+src/preprocessing/feature_engineering/
   __init__.py
   policy.py                       # Pydantic schema, load_policy
   column_groups.py                # re-export
@@ -378,7 +378,7 @@ src/data/feature_engineering/
 configs/
   feature_engineering.yaml
 
-tests/unit/data/feature_engineering/
+tests/unit/preprocessing/feature_engineering/
   test_temporal_derivatives.py
   test_stability.py
   test_physical_ratios.py
@@ -391,8 +391,8 @@ tests/unit/data/feature_engineering/
 
 Shared infrastructure reused unchanged:
 
-- `Finding`, `Severity`, JSON / MD writers — `src/data/cleaning/reporting.py`
-- `ColumnGroups`, `semantic_category` — `src/data/cleaning/column_groups.py`
+- `Finding`, `Severity`, JSON / MD writers — `src/preprocessing/cleaning/reporting.py`
+- `ColumnGroups`, `semantic_category` — `src/preprocessing/cleaning/column_groups.py`
 - Test fixtures `tiny_frame_factory`, `groups`, `project_root`,
   `ts_policy` — `tests/conftest.py` (plus the new `fe_policy` fixture).
 

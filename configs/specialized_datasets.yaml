@@ -2,7 +2,7 @@
 #
 # Master-validation thresholds and the column selectors for each
 # downstream dataset. Tune here, never in code. Loaded by
-# src/data/datasets/policy.py via pydantic.
+# src/preprocessing/datasets/policy.py via pydantic.
 #
 # Input: data/features/Dades_pellet_engineered.parquet (the feature-
 # engineering output). Outputs:
@@ -12,7 +12,7 @@
 #   - data/datasets/specialized/energy_dataset.parquet
 #
 # This stage performs SELECTION + VALIDATION ONLY. It never computes
-# new features (that belongs in src/data/feature_engineering/) and never
+# new features (that belongs in src/preprocessing/feature_engineering/) and never
 # fits models (that belongs in src/models/).
 
 # ---------------------------------------------------------------------------

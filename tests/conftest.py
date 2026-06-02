@@ -20,24 +20,24 @@ import numpy as np
 import pandas as pd
 import pytest
 from src.config import PROJECT_ROOT
-from src.data._common.column_groups import ColumnGroups, load_groups
-from src.data.cleaning.policy import CleaningPolicy, load_policy
-from src.data.datasets.policy import (
+from src.preprocessing._common.column_groups import ColumnGroups, load_groups
+from src.preprocessing.cleaning.policy import CleaningPolicy, load_policy
+from src.preprocessing.datasets.policy import (
     SpecializedDatasetsPolicy,
 )
-from src.data.datasets.policy import (
+from src.preprocessing.datasets.policy import (
     load_policy as load_datasets_policy,
 )
-from src.data.feature_engineering.policy import (
+from src.preprocessing.feature_engineering.policy import (
     FeatureEngineeringPolicy,
 )
-from src.data.feature_engineering.policy import (
+from src.preprocessing.feature_engineering.policy import (
     load_policy as load_fe_policy,
 )
-from src.data.time_series.policy import (
+from src.preprocessing.time_series.policy import (
     TimeSeriesPolicy,
 )
-from src.data.time_series.policy import (
+from src.preprocessing.time_series.policy import (
     load_policy as load_ts_policy,
 )
 

@@ -30,7 +30,7 @@ join back against.
 What this stage **does not** do:
 
 - It does **not** compute new features. Feature math belongs in
-  `src/data/feature_engineering/`. If a column is missing here, add it
+  `src/preprocessing/feature_engineering/`. If a column is missing here, add it
   upstream — never fabricate it during projection.
 - It does **not** fit models. Isolation Forest, LOF, Mahalanobis with
   a covariance fit, LSTM / Transformer / XGBoost trainings all belong
@@ -46,7 +46,7 @@ What this stage **does not** do:
 |---|---|
 | `data/datasets/master/master_dataset.parquet` | Canonical master. Engineered matrix promoted after integrity checks. |
 | `data/datasets/master/master_dataset_report.{json,md}` | Master integrity findings. |
-| `configs/schema_lock.json` | **Tracked** schema contract (column names + dtypes). Version-controlled (outside the git-ignored `data/` tree). Generate/refresh with `python -m src.data.datasets.run_datasets --write-schema-lock`, then commit; subsequent runs report drift against it. |
+| `configs/schema_lock.json` | **Tracked** schema contract (column names + dtypes). Version-controlled (outside the git-ignored `data/` tree). Generate/refresh with `python -m src.preprocessing.datasets.run_datasets --write-schema-lock`, then commit; subsequent runs report drift against it. |
 | `data/datasets/specialized/anomaly_detection_dataset.parquet` | Local-deviation features for Isolation Forest / Autoencoders / DBSCAN. |
 | `data/datasets/specialized/forecasting_dataset.parquet` | Predictive temporal structure for LSTM / Transformers / XGBoost forecasting. |
 | `data/datasets/specialized/energy_dataset.parquet` | Energetic optimisation & efficiency analysis. |
@@ -58,12 +58,12 @@ specialized dataset can be joined back to master.
 
 ---
 
-## 3. Boundary with `src/data/feature_engineering/` and `src/models/`
+## 3. Boundary with `src/preprocessing/feature_engineering/` and `src/models/`
 
 | Concern | Belongs in |
 |---|---|
-| Compute a new derived column | `src/data/feature_engineering/` |
-| Pick which columns are visible to a model family | `src/data/datasets/` (this stage) |
+| Compute a new derived column | `src/preprocessing/feature_engineering/` |
+| Pick which columns are visible to a model family | `src/preprocessing/datasets/` (this stage) |
 | Fit / persist / score a model | `src/models/` |
 
 The projection modules deliberately have *no transform logic*. They
@@ -77,8 +77,8 @@ fix is to add the feature upstream, not to compute it here.
 
 ```powershell
 # Stand-alone
-python -m src.data.datasets.run_datasets                 # full run
-python -m src.data.datasets.run_datasets --no-write      # diagnostic only
+python -m src.preprocessing.datasets.run_datasets                 # full run
+python -m src.preprocessing.datasets.run_datasets --no-write      # diagnostic only
 
 # Through the shim
 python -m src.preprocessing --stage datasets

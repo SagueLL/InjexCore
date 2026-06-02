@@ -39,13 +39,13 @@ data_generation → cleaning → time_series → feature_engineering → dataset
 
 | Stage | Package | Responsibility |
 |---|---|---|
-| Cleaning | `src/data/cleaning/` | Detect + remediate (timestamps, duplicates, physical ranges, frozen sensors, state consistency, missing values). |
-| Time-series | `src/data/time_series/` | Temporal conversion/index, optional resampling, rolling windows, temporal & state features. |
-| Feature engineering | `src/data/feature_engineering/` | Temporal derivatives, stability, physical ratios, energetic / operative / statistical-anomaly features. |
-| Specialized datasets | `src/data/datasets/` | Promote a canonical master dataset + project anomaly-detection / forecasting / energy datasets. |
+| Cleaning | `src/preprocessing/cleaning/` | Detect + remediate (timestamps, duplicates, physical ranges, frozen sensors, state consistency, missing values). |
+| Time-series | `src/preprocessing/time_series/` | Temporal conversion/index, optional resampling, rolling windows, temporal & state features. |
+| Feature engineering | `src/preprocessing/feature_engineering/` | Temporal derivatives, stability, physical ratios, energetic / operative / statistical-anomaly features. |
+| Specialized datasets | `src/preprocessing/datasets/` | Promote a canonical master dataset + project anomaly-detection / forecasting / energy datasets. |
 
 Cross-stage contracts (`Finding`, `Severity`, `ColumnGroups`, report writers,
-the strict Pydantic base) live in the neutral `src/data/_common/` package.
+the strict Pydantic base) live in the neutral `src/preprocessing/_common/` package.
 Project paths are centralized in `src/config.py`; per-stage policy lives in
 `configs/*.yaml`.
 
@@ -66,15 +66,16 @@ InjexCore/
 ├── scripts/                 # One-off build/EDA tooling (dictionary, classification, EDA notebook)
 ├── src/
 │   ├── config.py            # Central project paths
-│   ├── data_generation.py   # Synthetic dataset generator
-│   ├── preprocessing.py     # CLI shim dispatching --stage
-│   └── data/
-│       ├── _common/         # Shared contracts (Finding, Severity, ColumnGroups, StrictModel)
-│       ├── cleaning/
-│       ├── time_series/
-│       ├── feature_engineering/
-│       └── datasets/
-├── tests/                   # pytest unit tests mirroring src/data/
+│   ├── data_generation/     # Synthetic dataset generator (generate.py)
+│   ├── preprocessing/       # Preprocessing pipeline + combined --stage CLI (__main__.py)
+│   │   ├── _common/         # Shared contracts (Finding, Severity, ColumnGroups, StrictModel)
+│   │   ├── cleaning/
+│   │   ├── time_series/
+│   │   ├── feature_engineering/
+│   │   └── datasets/
+│   └── intelligence/        # Intelligence Layer (characterises normal behaviour)
+│       └── behaviour/       # Operational profiles + statistical baselines (Iteration A)
+├── tests/                   # pytest unit tests mirroring src/preprocessing/
 ├── pyproject.toml           # Packaging, dependencies, ruff/mypy/pytest config
 ├── requirements.txt         # Pinned runtime mirror
 └── requirements-dev.txt     # Pinned dev tooling mirror
@@ -107,10 +108,10 @@ The editable install puts `src` on the import path, so `import src...` and the
 python src/data_generation.py
 
 # Run individual preprocessing stages (append --no-write for diagnostic-only)
-python -m src.data.cleaning.run_cleaning
-python -m src.data.time_series.run_ts_engineering
-python -m src.data.feature_engineering.run_feature_engineering
-python -m src.data.datasets.run_datasets
+python -m src.preprocessing.cleaning.run_cleaning
+python -m src.preprocessing.time_series.run_ts_engineering
+python -m src.preprocessing.feature_engineering.run_feature_engineering
+python -m src.preprocessing.datasets.run_datasets
 
 # Or drive stages through the shim
 python -m src.preprocessing --stage cleaning      # default
@@ -118,7 +119,7 @@ python -m src.preprocessing --stage features      # cleaning → ts → fe
 python -m src.preprocessing --stage all           # cleaning → ts → fe → datasets
 
 # Refresh the schema-lock contract after an intentional master-schema change
-python -m src.data.datasets.run_datasets --write-schema-lock   # commit configs/schema_lock.json
+python -m src.preprocessing.datasets.run_datasets --write-schema-lock   # commit configs/schema_lock.json
 ```
 
 Chained `--stage` modes (`features`, `all`) accept only the universal flags

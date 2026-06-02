@@ -53,10 +53,10 @@ independently rerunnable.
 
 ```bash
 # Full run (writes feature matrix + both reports)
-python -m src.data.time_series.run_ts_engineering
+python -m src.preprocessing.time_series.run_ts_engineering
 
 # Diagnostic only — emits the reports, skips the parquet write
-python -m src.data.time_series.run_ts_engineering --no-write
+python -m src.preprocessing.time_series.run_ts_engineering --no-write
 
 # Cleaning + features in one command (via the shim)
 python -m src.preprocessing --stage features
@@ -125,7 +125,7 @@ column name. Instead, it asks
 
 Classification is read from `data/features/variable_classification.csv`
 and resolved by `ColumnGroups.semantic_category()` in
-`src/data/cleaning/column_groups.py`. Routing order matters there: a
+`src/preprocessing/cleaning/column_groups.py`. Routing order matters there: a
 column ending in `_sp` is matched as `setpoint` before falling through
 to its parent `control`; an alarm flag is matched as `alarm` before
 `state_flag`.
@@ -182,7 +182,7 @@ rolling feature.
 
 The pipeline enforces `closed='left'` by default for every rolling
 family. The window at index `t` sees samples `[t - W, t)` only. This is
-verified in `tests/unit/data/time_series/test_rolling_windows.py`:
+verified in `tests/unit/preprocessing/time_series/test_rolling_windows.py`:
 
 ```python
 df["granulator_power"] = np.arange(20)
@@ -271,7 +271,7 @@ enabled family for that column. `disable_families` /
 `enable_families` toggle the `enabled` flag.
 
 The merge logic is `TimeSeriesPolicy.resolve(category, column)` in
-`src/data/time_series/policy.py`. When debugging a missing or
+`src/preprocessing/time_series/policy.py`. When debugging a missing or
 unexpected feature, call this function in a REPL — its output is the
 exact `CategoryDefaults` that drove the column's feature generation.
 
@@ -279,7 +279,7 @@ exact `CategoryDefaults` that drove the column's feature generation.
 
 ## 9. Stage reference
 
-### 9.1 `temporal_conversion` — `src/data/time_series/temporal_conversion.py`
+### 9.1 `temporal_conversion` — `src/preprocessing/time_series/temporal_conversion.py`
 
 Cleaning already parses `timestamp` to `datetime64[ns]`, but
 `io.load_clean()` reads the CSV back as strings, so this stage re-parses
@@ -288,7 +288,7 @@ it. Emits `NORMAL/already_datetime` when no work was needed and
 `NaT` — the cleaning stage's own `timestamps` module would have caught
 those earlier, so it should not happen on a freshly-cleaned input.
 
-### 9.2 `temporal_index` — `src/data/time_series/temporal_index.py`
+### 9.2 `temporal_index` — `src/preprocessing/time_series/temporal_index.py`
 
 Promotes the timestamp column to the index, dropping duplicates first
 (keep first) when configured. Resampling and time-aware rolling depend
@@ -298,7 +298,7 @@ see `temporal_index` emit an `AWARE/duplicate_index` finding, an
 upstream cleaning bug is likely — duplicates should have been removed
 by the cleaning `duplicates` module.
 
-### 9.3 `resampling` — `src/data/time_series/resampling.py`
+### 9.3 `resampling` — `src/preprocessing/time_series/resampling.py`
 
 Skipped by default. When enabled, each column is aggregated using its
 semantic category's rule (`process_sensor → mean`, `state_flag → max`,
@@ -310,7 +310,7 @@ flip `resampling.enabled: true` and set `rule` to your unification
 target. The cleaning stage's 60 s grid means this is off for the
 current pellet dataset.
 
-### 9.4 `rolling_windows` — `src/data/time_series/rolling_windows.py`
+### 9.4 `rolling_windows` — `src/preprocessing/time_series/rolling_windows.py`
 
 Iterates eligible columns (`process_sensor` + `control`, skipping state
 and alarm), resolves the policy, emits one `Finding` per
@@ -324,13 +324,13 @@ To **add a new rolling family** (e.g. rolling median), add a new
 `apply()` branch, and add it to `CategoryDefaults` in `policy.py`.
 About 15 lines.
 
-### 9.5 `temporal_features` — `src/data/time_series/temporal_features.py`
+### 9.5 `temporal_features` — `src/preprocessing/time_series/temporal_features.py`
 
 Same shape as `rolling_windows`, but for shift-based features
 (`shift`, `pct_change`, `diff`). Lag-of-N rules are leak-safe by
 construction.
 
-### 9.6 `state_features` — `src/data/time_series/state_features.py`
+### 9.6 `state_features` — `src/preprocessing/time_series/state_features.py`
 
 Three families that preserve the **physical meaning** of binary flags:
 
@@ -355,7 +355,7 @@ single `NORMAL/skipped` finding.
 ## 10. Where things live
 
 ```
-src/data/time_series/
+src/preprocessing/time_series/
   __init__.py
   policy.py                 # Pydantic schema, load_policy(), .resolve()
   column_groups.py          # re-export of cleaning's loader
@@ -372,7 +372,7 @@ src/data/time_series/
 configs/
   time_series.yaml          # all thresholds, windows, overrides
 
-tests/unit/data/time_series/
+tests/unit/preprocessing/time_series/
   test_temporal_conversion.py
   test_temporal_index.py
   test_resampling.py
@@ -384,8 +384,8 @@ tests/unit/data/time_series/
 
 Shared infrastructure reused from the cleaning module (no fork):
 
-- `Finding`, `Severity`, `write_json`, `write_markdown` — `src/data/cleaning/reporting.py`
-- `ColumnGroups`, `load_groups`, `ColumnGroups.semantic_category` — `src/data/cleaning/column_groups.py`
+- `Finding`, `Severity`, `write_json`, `write_markdown` — `src/preprocessing/cleaning/reporting.py`
+- `ColumnGroups`, `load_groups`, `ColumnGroups.semantic_category` — `src/preprocessing/cleaning/column_groups.py`
 - Test fixtures `tiny_frame_factory`, `groups`, `project_root` — `tests/conftest.py`
 - A new session-scoped `ts_policy` fixture is added alongside the existing `policy` fixture.
 

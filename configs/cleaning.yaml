@@ -1,7 +1,7 @@
 # InjexCore — Data cleaning policy
 #
 # All thresholds and per-variable bounds. Tune here, never in code.
-# Loaded by src/data/cleaning/policy.py via pydantic-settings.
+# Loaded by src/preprocessing/cleaning/policy.py via pydantic-settings.
 
 # ---------------------------------------------------------------------------
 # Module #3 — timestamps

@@ -2,7 +2,7 @@
 #
 # All thresholds and per-column overrides for the time-series engineering
 # pipeline. Tune here, never in code. Loaded by
-# src/data/time_series/policy.py via pydantic.
+# src/preprocessing/time_series/policy.py via pydantic.
 
 # ---------------------------------------------------------------------------
 # Stage 1 — temporal conversion

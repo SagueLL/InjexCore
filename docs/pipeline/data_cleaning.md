@@ -43,10 +43,10 @@ Running the pipeline writes three artefacts:
 
 ```bash
 # Full run (writes cleaned CSV + both reports)
-python -m src.data.cleaning.run_cleaning
+python -m src.preprocessing.cleaning.run_cleaning
 
 # Diagnostic only — emits the reports, skips the CSV write
-python -m src.data.cleaning.run_cleaning --no-write
+python -m src.preprocessing.cleaning.run_cleaning --no-write
 
 # Equivalent legacy entry point (re-export shim):
 python -m src.preprocessing
@@ -92,7 +92,7 @@ def detect(df, policy, groups) -> list[Finding]
 def apply(df, findings, policy, groups) -> pd.DataFrame
 ```
 
-`Finding` (defined in `src/data/cleaning/reporting.py`) is the lingua
+`Finding` (defined in `src/preprocessing/cleaning/reporting.py`) is the lingua
 franca:
 
 ```python
@@ -223,7 +223,7 @@ unclassified_nan / keep_nan` — never silently dropped.
 Single source of truth for thresholds and per-variable physical
 bounds. Loaded via `pydantic-settings` into `CleaningPolicy` at startup
 — no magic numbers in code. Schema lives in
-`src/data/cleaning/policy.py`.
+`src/preprocessing/cleaning/policy.py`.
 
 Adding a new bound is a one-liner:
 
@@ -273,27 +273,27 @@ Observations:
 
 ```
 src/
-├── data/
-│   ├── __init__.py
-│   └── cleaning/
-│       ├── __init__.py
-│       ├── run_cleaning.py       # CLI orchestrator
-│       ├── policy.py             # pydantic schema for cleaning.yaml
-│       ├── reporting.py          # Finding dataclass, JSON/MD writers
-│       ├── io.py                 # Spanish-locale CSV loader (3-row header)
-│       ├── column_groups.py      # variable_classification.csv → column sets
-│       ├── timestamps.py
-│       ├── duplicates.py
-│       ├── physical_ranges.py
-│       ├── frozen_sensors.py
-│       ├── state_consistency.py
-│       └── missing_values.py
-└── preprocessing.py              # back-compat re-export shim
+└── preprocessing/
+    ├── __init__.py
+    ├── __main__.py              # combined --stage CLI dispatcher
+    └── cleaning/
+        ├── __init__.py
+        ├── run_cleaning.py       # CLI orchestrator
+        ├── policy.py             # pydantic schema for cleaning.yaml
+        ├── reporting.py          # Finding dataclass, JSON/MD writers
+        ├── io.py                 # Spanish-locale CSV loader (3-row header)
+        ├── column_groups.py      # variable_classification.csv → column sets
+        ├── timestamps.py
+        ├── duplicates.py
+        ├── physical_ranges.py
+        ├── frozen_sensors.py
+        ├── state_consistency.py
+        └── missing_values.py
 
 configs/
 └── cleaning.yaml                 # all thresholds, per-variable bounds
 
-tests/unit/data/cleaning/         # 40 unit tests, run with `pytest tests/`
+tests/unit/preprocessing/cleaning/         # 40 unit tests, run with `pytest tests/`
 
 data/
 ├── raw/Dades_pellet.csv          # source (read-only)
