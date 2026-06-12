@@ -21,9 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Modeling/intelligence layer (v2). Declared here so the deps are reviewed
-# in one place; not pulled by the core install since no current module
-# imports them. Install with: pip install -e ".[models]"
+# Modeling/intelligence layer. Required by the Iteration B intelligence
+# components (pca, anomaly) and their tests; kept out of the core install
+# so preprocessing-only use stays light. Install with: pip install -e ".[models]"
 models = [
     "scikit-learn>=1.4,<2",
     "joblib>=1.4,<2",
