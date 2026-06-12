@@ -1,0 +1,77 @@
+# Anomaly Intelligence v1 policy.
+#
+# Validated against src/intelligence/anomaly/policy.py (StrictModel: unknown
+# keys raise). Every learned artifact (covariance, Isolation Forest, ECDF
+# normalization grids, severity thresholds) is fitted on the leakage-safe
+# training window persisted by Behaviour Intelligence. Individual detector
+# scores are always preserved next to the combined score.
+
+features:
+  # Detectors B (mahalanobis) and D (isolation_forest) run on the raw
+  # process sensors (default). Detector A uses the behaviour baseline
+  # sensors by construction; detector C uses the pca run's feature set.
+  source: process_sensor
+  include_columns: []
+  exclude_columns: []
+  min_non_null_fraction: 0.7
+
+profiles:
+  min_samples_per_profile: 200
+  exclude_profiles: [unknown]
+  # Not supported by anomaly v1 (rows are scored by their own profile only);
+  # setting it true raises an AWARE finding and is otherwise ignored.
+  global_fallback: false
+
+statistical:
+  enabled: true
+  # Baseline columns used for breach flags.
+  lower_percentile: p05
+  upper_percentile: p95
+  # Sensors with |x - median| / (iqr/1.349) at or above this are listed as
+  # affected variables.
+  robust_z_threshold: 3.5
+  top_k_variables: 3
+
+mahalanobis:
+  enabled: true
+  # ledoit_wolf self-tunes the shrinkage; shrunk uses the fixed `shrinkage`.
+  estimator: ledoit_wolf
+  shrinkage: 0.1
+  top_k_variables: 3
+
+pca_detector:
+  enabled: true
+  # Empirical TRAIN-score percentiles, not parametric (F-distribution)
+  # limits — the data is autocorrelated and non-normal.
+  t2_threshold_percentile: 99.0
+  q_threshold_percentile: 99.0
+  top_k_variables: 3
+
+isolation_forest:
+  enabled: true
+  n_estimators: 200
+  max_samples: auto
+  # Deterministic fits; contamination is intentionally not exposed
+  # (triggering uses the train ECDF, not sklearn's internal offset).
+  random_state: 42
+
+combine:
+  # max = conservative (worst detector wins); weighted_mean averages the
+  # available detectors with `weights`.
+  method: max
+  weights:
+    statistical: 1.0
+    mahalanobis: 1.0
+    pca_q: 1.0
+    pca_t2: 1.0
+    isolation_forest: 1.0
+  # Normalized score level at which a detector counts as "triggered"
+  # (pca_q / pca_t2 use their own percentiles above).
+  trigger_percentile: 99.0
+  # Severity thresholds: percentiles of the TRAIN combined score per profile.
+  warning_percentile: 99.0
+  anomaly_percentile: 99.9
+
+summaries:
+  top_events: 50
+  timeline_freq: 1h
