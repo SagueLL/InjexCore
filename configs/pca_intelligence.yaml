@@ -1,0 +1,42 @@
+# PCA Intelligence policy.
+#
+# Validated against src/intelligence/pca/policy.py (StrictModel: unknown
+# keys raise). Fitted per supported profile on the leakage-safe training
+# window persisted by Behaviour Intelligence — this component never
+# recomputes the split. Training rows are scored in-sample on purpose:
+# Anomaly Intelligence fits its T2/Q thresholds from the training scores.
+
+features:
+  # process_sensor -> the ~17 raw process signals (default; interpretable
+  # loadings). Engineered features would feed PCA near-duplicate columns
+  # (a sensor and its rolling mean), inflating the leading components with
+  # autocorrelation artifacts — opt in via `explicit` only deliberately.
+  source: process_sensor
+  include_columns: []
+  exclude_columns: []
+  min_non_null_fraction: 0.7
+
+profiles:
+  min_samples_per_profile: 200
+  exclude_profiles: [unknown]
+  # Pool all rows into a __global__ pseudo-profile IN ADDITION to the
+  # per-profile fits. Off by default: it mixes operational regimes.
+  global_fallback: false
+
+model:
+  # Smallest component count whose cumulative explained variance reaches
+  # the target (optionally capped by max_components).
+  explained_variance_target: 0.95
+  max_components: null
+  # Profiles ending up with fewer eligible features are skipped + reported.
+  min_features: 3
+  # robust (median/IQR) is the default: industrial sensors carry outliers
+  # that would distort a mean/std scaler.
+  scaler: robust
+  # median_impute fills gaps with the TRAINING median (leakage-safe);
+  # drop_rows drops incomplete rows instead.
+  missing_policy: median_impute
+  max_missing_fraction: 0.3
+  near_constant_std: 1.0e-9
+  # Deterministic; only relevant for randomized solvers but pinned anyway.
+  random_state: 42
