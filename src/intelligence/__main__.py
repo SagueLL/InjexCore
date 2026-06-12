@@ -1,21 +1,23 @@
 """Component dispatcher for the InjexCore Intelligence Layer.
 
-Runs an Intelligence-Layer component from a single entry point. Today only
-``behaviour`` (Behaviour Intelligence) exists; further components
-(correlation intelligence, PCA, anomaly scoring) register here as they land
-— add the component's ``main`` to ``_COMPONENTS`` and it gets a
-``--component`` value for free.
+Runs an Intelligence-Layer component from a single entry point. Components
+register their ``main`` in ``_COMPONENTS`` and get a ``--component`` value
+for free. The expected execution order mirrors the artifact dependencies::
+
+    behaviour → correlation / pca → anomaly
 
 Usage::
 
     python -m src.intelligence                          # default component (behaviour)
     python -m src.intelligence --component behaviour
-    python -m src.intelligence --component behaviour --no-write --log-level DEBUG
+    python -m src.intelligence --component correlation --no-write --log-level DEBUG
+    python -m src.intelligence --component pca
+    python -m src.intelligence --component anomaly --pca-run latest
 
 Flags after ``--component X`` are forwarded verbatim to that component's own
-CLI — e.g. ``python -m src.intelligence.behaviour.run_behaviour --help`` lists
-the behaviour flags. A component can always still be invoked directly via its
-own ``run_*`` module; this dispatcher is a convenience over the layer.
+CLI — e.g. ``python -m src.intelligence.pca.run_pca --help`` lists the pca
+flags. A component can always still be invoked directly via its own
+``run_*`` module; this dispatcher is a convenience over the layer.
 """
 
 from __future__ import annotations
@@ -23,12 +25,18 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 
+from src.intelligence.anomaly.run_anomaly import main as anomaly_main
 from src.intelligence.behaviour.run_behaviour import main as behaviour_main
+from src.intelligence.correlation.run_correlation import main as correlation_main
+from src.intelligence.pca.run_pca import main as pca_main
 
 # Registry: component name -> its ``main(argv) -> int`` entry point.
 # Add new Intelligence-Layer components here as they are built.
 _COMPONENTS: dict[str, Callable[[list[str] | None], int]] = {
     "behaviour": behaviour_main,
+    "correlation": correlation_main,
+    "pca": pca_main,
+    "anomaly": anomaly_main,
 }
 _DEFAULT_COMPONENT = "behaviour"
 
