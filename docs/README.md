@@ -41,6 +41,7 @@ The layer past preprocessing: it characterises normal machine behaviour and
 | Correlation Intelligence (per-profile relationships + shift diagnostics) | [intelligence/correlation_intelligence.md](intelligence/correlation_intelligence.md) |
 | PCA Intelligence (per-profile multivariate structure, T²/Q scoring) | [intelligence/pca_intelligence.md](intelligence/pca_intelligence.md) |
 | Anomaly Intelligence v1 (four explainable detectors + severity) | [intelligence/anomaly_intelligence.md](intelligence/anomaly_intelligence.md) |
+| Sensor Health Intelligence v1 (instrumentation-anomaly rules + quarantine recommendations) | [intelligence/sensor_health_intelligence.md](intelligence/sensor_health_intelligence.md) |
 
 ## context/ — external operational context
 
@@ -51,6 +52,7 @@ model fitting or scoring.
 | Component | Doc |
 |---|---|
 | BOM Operational Context (orders, recipes, signatures, master-aligned timeline) | [context/bom_context.md](context/bom_context.md) |
+| Operational Context Overlay (profile + steam + sensor-health + BOM per timestamp) | [context/operational_context.md](context/operational_context.md) |
 
 ## project-state/ — versioned snapshots
 

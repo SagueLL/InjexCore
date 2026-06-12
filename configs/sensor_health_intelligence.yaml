@@ -1,0 +1,148 @@
+# Sensor Health Intelligence v1 policy.
+# Validated against src/intelligence/sensor_health/policy.py (StrictModel:
+# unknown keys raise). Rule references are computed on the behaviour train
+# window only — leakage-safe. This component never excludes data: quarantine
+# is a recommendation requiring human approval; no model input is modified.
+
+features:
+  source: process_sensor
+  include_columns: []
+  exclude_columns: []
+  min_non_null_fraction: 0.0 # sensor health must SEE sparse sensors; never pre-drop
+
+profiles:
+  min_samples_per_profile: 200
+  exclude_profiles: [unknown]
+  global_fallback: false
+
+rules:
+  flatline:
+    enabled: true
+    eps: 0.0 # exact equality (PLC-quantized values)
+    min_run_rows: 60 # 1 h floor at 1-min cadence
+    train_run_multiplier: 1.5 # dynamic: max(floor, 1.5 x train max constant run)
+  flatline_zero:
+    enabled: true
+    zero_eps: 1.0e-9
+    min_run_rows: 30
+    min_run_rows_abnormal: 15 # sensors with ~no train zeros outside allowed profiles
+    abnormal_train_zero_fraction: 0.001
+    train_run_multiplier: 1.5
+  variance_collapse:
+    enabled: true
+    window_rows: 60
+    collapse_ratio: 0.05
+    require_profile_pure_window: true # never flag across a regime change
+  variance_explosion:
+    enabled: true
+    window_rows: 60
+    explosion_ratio: 6.0
+    require_profile_pure_window: true
+  missingness_spike:
+    enabled: true
+    window_rows: 240 # 4 h
+    spike_margin: 0.25 # over the sensor's own train missing rate
+    absolute_floor: 0.5
+    train_max_margin: 0.05 # headroom over the worst train rolling missingness:
+    #   sensors with routine full outage blocks (weekend gaps) never spike on
+    #   the same pattern; a never-missing sensor still fires at the floor.
+  abrupt_offset:
+    enabled: true
+    window_rows: 60
+    jump_z_threshold: 8.0
+    persistence_rows: 30
+    # warning-capped by design: a step alone never drives faulty.
+  saturation:
+    enabled: true
+    rel_tolerance: 1.0e-6
+    abs_tolerance: 1.0e-9
+    min_run_rows: 30
+    # only fires on configured physical bounds — train extremes are touched
+    # legitimately, so there is no train-minmax fallback.
+  counter_reset:
+    enabled: true
+    drop_fraction: 0.9 # of train median, within the detect window
+    low_ceiling_fraction: 0.01
+    detect_window_rows: 5
+    recovery_floor_fraction: 0.5
+    recovery_window_rows: 60
+    persistent_zero_rows: 240 # 4 h low -> persistent_zero_after_reset
+  stale_signal:
+    enabled: true
+    window_rows: 120
+    max_unique_fraction: 0.05
+
+scoring:
+  rule_base_scores:
+    flatline_zero: 0.9
+    counter_reset: 0.9
+    counter_reset_recovered: 0.4
+    flatline: 0.7
+    saturation_low: 0.7
+    saturation_high: 0.7
+    missingness_spike: 0.7
+    variance_collapse: 0.5
+    variance_explosion: 0.5
+    abrupt_offset: 0.4
+    stale_signal: 0.3
+  strong_rule_min_base: 0.7
+  corroboration_bonus: 0.1
+  persistent_min_rows: 120 # 2 h of a strong rule -> faulty
+  unknown_availability_window_rows: 60
+  unknown_min_valid_fraction: 0.3
+
+events:
+  gap_merge_rows: 5
+  persistent_event_rows: 240 # 4 h
+
+quarantine:
+  trigger_issue_types:
+    [flatline_zero, counter_reset, saturation_low, saturation_high, missingness_spike]
+  require_persistent: true
+  # approval_required=true / approved=false are hardcoded, not configurable.
+
+sensors:
+  defaults:
+    kind: process
+    expected_zero_during_profiles: []
+    allow_flatline_profiles: [stopped, shutdown]
+    physical_min: null
+    physical_max: null
+    disabled_rules: []
+  overrides:
+    # Five sensors with legitimate ~5,000-row zero runs while not producing.
+    # Zeros during `alarm` are intentionally NOT suppressed (alarm is a
+    # running state) — they surface as reviewable warnings.
+    granulator_power:
+      expected_zero_during_profiles: [stopped, shutdown]
+      physical_min: 0.0
+    granulator_production_rate:
+      expected_zero_during_profiles: [stopped, shutdown]
+      physical_min: 0.0
+    conditioner_l2_power:
+      expected_zero_during_profiles: [stopped, shutdown]
+      physical_min: 0.0
+    expander_ex2_power:
+      expected_zero_during_profiles: [stopped, shutdown]
+      physical_min: 0.0
+    extruder_specific_energy:
+      expected_zero_during_profiles: [stopped, shutdown]
+      physical_min: 0.0
+    steam_valve_flow_me2:
+      # Median 0 in EVERY profile (zero is normal even while producing):
+      # zero rules are inert for this sensor by design.
+      expected_zero_during_profiles:
+        [stopped, shutdown, startup, alarm, low_production, mid_production, high_production]
+      allow_flatline_profiles:
+        [stopped, shutdown, startup, alarm, low_production, mid_production, high_production]
+      physical_min: 0.0
+    inlet_hopper_points:
+      kind: counter # oscillating counter, NOT monotone
+      expected_zero_during_profiles: [] # never zero in train, any profile
+      allow_flatline_profiles: []
+      disabled_rules: [variance_collapse, variance_explosion, abrupt_offset]
+    expander_ex2_hydraulic_press:
+      # 71% train missingness: behaviour fitted no baselines for it; chronic
+      # gaps map to status=unknown, and the missingness-spike threshold
+      # self-raises to ~0.96 via the train reference.
+      disabled_rules: [variance_collapse, variance_explosion, abrupt_offset]

@@ -7,11 +7,19 @@ from src.intelligence.__main__ import _COMPONENTS, _split_component_arg
 
 
 def test_all_components_registered() -> None:
-    assert set(_COMPONENTS) == {"behaviour", "correlation", "pca", "anomaly"}
+    assert set(_COMPONENTS) == {
+        "behaviour",
+        "correlation",
+        "pca",
+        "anomaly",
+        "sensor-health",
+    }
     assert all(callable(main) for main in _COMPONENTS.values())
 
 
-@pytest.mark.parametrize("component", ["behaviour", "correlation", "pca", "anomaly"])
+@pytest.mark.parametrize(
+    "component", ["behaviour", "correlation", "pca", "anomaly", "sensor-health"]
+)
 def test_component_arg_extracted_and_rest_forwarded(component: str) -> None:
     name, rest = _split_component_arg(
         ["--component", component, "--no-write", "--log-level", "DEBUG"]
