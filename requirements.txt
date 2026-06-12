@@ -1,10 +1,10 @@
-pandas
-numpy
-matplotlib
-seaborn
-scikit-learn
-jupyter
-pydantic>=2.7.0
-pyyaml>=6.0.1
-pyarrow>=15.0.0
-Git-GitHub
+# InjexCore — runtime dependencies (pinned mirror of pyproject [project.dependencies]).
+# pyproject.toml is authoritative; prefer `pip install -e .` (or `-e ".[dev]"`).
+# Modeling deps (scikit-learn, joblib) live in the `models` extra: pip install -e ".[models]".
+pandas>=2.2,<4
+numpy>=1.26,<3
+pydantic>=2.7,<3
+pyyaml>=6.0.1,<7
+pyarrow>=15,<30
+matplotlib>=3.8,<4
+seaborn>=0.13,<1

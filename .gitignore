@@ -4,8 +4,14 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Packaging / build artifacts
+*.egg-info/
+build/
+dist/
+
 # Virtual environments
 venv/
+.venv/
 .env/
 
 # Jupyter

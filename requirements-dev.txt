@@ -1,0 +1,8 @@
+# InjexCore — development tooling (pinned mirror of pyproject [project.optional-dependencies].dev).
+# Prefer `pip install -e ".[dev]"`. Includes runtime deps via the line below.
+-r requirements.txt
+pytest>=8,<10
+ruff>=0.6,<1
+mypy>=1.10,<2
+pre-commit>=3.7,<5
+types-PyYAML>=6,<7

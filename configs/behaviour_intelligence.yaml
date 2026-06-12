@@ -1,0 +1,57 @@
+# Behaviour Intelligence policy (Iteration A).
+#
+# Characterises NORMAL machine behaviour per operational profile.
+# Input:  data/datasets/master/master_dataset.parquet
+# Output: data/intelligence/behaviour/{profile_labels,baselines}.parquet (+ reports)
+#
+# Loaded and validated by src/intelligence/behaviour/policy.py
+# (pydantic, extra="forbid" — a misspelled key fails loudly).
+# Windows are in samples (master grid = 60 s).
+
+# --- Sensor set baselines are computed over -------------------------------
+# Recommend the ~17 raw process_sensor columns (interpretable, avoids the
+# 566-column engineered explosion). Switch to `explicit` to hand-pick.
+sensors:
+  source: process_sensor          # process_sensor | explicit
+  include_columns: []             # used only when source == explicit
+  exclude_columns: []
+  min_non_null_fraction: 0.7      # drop a sensor from a profile fit below this
+
+# --- Leakage guard --------------------------------------------------------
+# Every learned artifact (production quantile edges, baseline statistics)
+# is fitted on the training slice only, then applied to the full dataset.
+fit_window:
+  strategy: fraction              # fraction | all | date_range
+  train_fraction: 0.7             # first 70% of the time-ordered rows
+  start: null                     # ISO timestamp, used when strategy == date_range
+  end: null
+
+# --- Operational-profile segmentation -------------------------------------
+profiles:
+  enabled: true
+  running_column: n_subsystems_running          # >0 => machine on; falls back to OR(running_flags)
+  production_column: granulator_production_rate  # throughput KPI for the production tertiles
+  production_quantiles: [0.33, 0.67]             # two cuts => low / mid / high
+  startup:
+    enabled: true
+    window_samples: 30            # samples after a 0->1 machine-on edge
+  shutdown:
+    enabled: true
+    window_samples: 30            # samples before a 1->0 machine-off edge
+  alarm:
+    enabled: true
+    any_alarm_column: any_alarm_while_running
+    time_since_alarm_column: time_since_any_alarm
+    window_samples: 30            # rows within this many samples of an alarm
+  material_change:
+    mode: candidate_flag          # candidate_flag | off  (proxy column, NOT a regime)
+    batch_columns: [batch_id, batch_quality_id]
+  precedence: [alarm, startup, shutdown, production]   # among running rows; highest wins
+  min_samples_per_profile: 200    # below this, skip the baseline fit for that profile
+  unsupported_regimes: [cleaning, maintenance, recipe_change]  # documented, not fabricated
+
+# --- Statistical baselines ------------------------------------------------
+baselines:
+  enabled: true
+  # count/mean/median/std/min/max/iqr are always emitted; these add pNN columns.
+  percentiles: [5, 25, 50, 75, 95]

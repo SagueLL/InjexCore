@@ -7,66 +7,51 @@
 
 ## Project Overview
 
-InjexCore is an early-stage project focused on building a predictive maintenance system for plastic injection machines.
+InjexCore is a predictive-maintenance system for plastic injection moulding
+machines. It analyses production telemetry, detects anomalous behaviour, and
+classifies each production cycle as `normal`, `warning`, or `anomaly` to
+anticipate machine degradation before failures occur — reducing downtime,
+scrap, and operational cost.
 
-The goal is to analyze machine data, detect anomalous behavior, and anticipate potential failures before they occur—helping reduce downtime, production defects, and operational costs.
-
-This project follows a practical, incremental approach: starting with simulated data and evolving into a functional, real-world applicable system.
-
----
-
-## 3-Month MVP Objective
-
-The initial goal is to build a **simple but functional system** that:
-
-* Works with simulated injection machine data
-* Detects anomalous behavior
-* Outputs a clear machine state (Normal / Warning / Anomaly)
-* Provides visual insights into machine performance over time
-* Can be presented as a solid technical portfolio project
+The project follows a practical, incremental approach (CRISP-DM): the MVP works
+with synthetic data and a real pellet-granulation line dataset; real-time
+machine integration is planned for a later phase.
 
 ---
 
 ## Problem Statement
 
-Companies operating plastic injection machines often face:
-
-* Unexpected machine downtime
-* Production defects (scrap)
-* High energy consumption
-* Inefficient or reactive maintenance strategies
-
-InjexCore aims to shift from **reactive to predictive maintenance** by identifying abnormal patterns early.
+Plants operating injection machines face unexpected downtime, production
+defects, high energy consumption, and reactive maintenance. InjexCore shifts
+from **reactive to predictive** maintenance by surfacing abnormal patterns
+early from sensor/telemetry data.
 
 ---
 
-## Current Progress
+## Architecture
 
-### Completed
+A linear, modular data layer — one package per preprocessing stage — feeds the
+(planned) modeling and serving layers:
 
-* Project structure and repository setup
-* Synthetic dataset generation
-* Simulation of industrial variables:
+```
+data_generation → cleaning → time_series → feature_engineering → datasets → [models] → [api]
+```
 
-  * Temperature
-  * Pressure
-  * Cycle time
-* Initial data visualization:
+| Stage | Package | Responsibility |
+|---|---|---|
+| Cleaning | `src/preprocessing/cleaning/` | Detect + remediate (timestamps, duplicates, physical ranges, frozen sensors, state consistency, missing values). |
+| Time-series | `src/preprocessing/time_series/` | Temporal conversion/index, optional resampling, rolling windows, temporal & state features. |
+| Feature engineering | `src/preprocessing/feature_engineering/` | Temporal derivatives, stability, physical ratios, energetic / operative / statistical-anomaly features. |
+| Specialized datasets | `src/preprocessing/datasets/` | Promote a canonical master dataset + project anomaly-detection / forecasting / energy datasets. |
 
-  * Realistic machine behavior over time
-  * Detection of visible anomalous patterns
+Cross-stage contracts (`Finding`, `Severity`, `ColumnGroups`, report writers,
+the strict Pydantic base) live in the neutral `src/preprocessing/_common/` package.
+Project paths are centralized in `src/config.py`; per-stage policy lives in
+`configs/*.yaml`.
 
-### In Progress
-
-* Data preprocessing and normalization
-* Definition of anomaly criteria
-
-### Next Steps
-
-* Implement anomaly detection model
-* Define machine states (Normal / Warning / Anomaly)
-* Build clear output system
-* Improve visualizations (dashboard-style)
+See the stage reference docs under [docs/pipeline/](docs/pipeline/):
+`data_cleaning.md`, `time_series_engineering.md`, `feature_engineering.md`,
+`specialized_datasets.md` ([docs/README.md](docs/README.md) is the full map).
 
 ---
 
@@ -74,128 +59,120 @@ InjexCore aims to shift from **reactive to predictive maintenance** by identifyi
 
 ```text
 InjexCore/
-├── data/
-│   ├── raw/
-│   │   └──dataset_pro.cvs
-│   └── processed/
-│
-├── images/
-│
-├── notebooks/
-│   ├── comprobacion_dataset.py
-│   └── eda.ipynb
-│
+├── configs/                 # Per-stage YAML policy + schema_lock.json contract
+├── data/                    # raw / processed / features / datasets (git-ignored)
+├── docs/                    # Stage references, master version, session notes
+├── notebooks/               # Exploratory EDA only (git-ignored)
+├── scripts/                 # One-off build/EDA tooling (dictionary, classification, EDA notebook)
 ├── src/
-│   ├── data_generation.py
-│   ├── preprocessing.py
-│   ├── anomaly_detection.py
-│   └── visualization.py
-│
-├── README.md
-├── requirements.txt
-└── .gitignore
+│   ├── config.py            # Central project paths
+│   ├── data_generation/     # Synthetic dataset generator (generate.py)
+│   ├── preprocessing/       # Preprocessing pipeline + combined --stage CLI (__main__.py)
+│   │   ├── _common/         # Shared contracts (Finding, Severity, ColumnGroups, StrictModel)
+│   │   ├── cleaning/
+│   │   ├── time_series/
+│   │   ├── feature_engineering/
+│   │   └── datasets/
+│   └── intelligence/        # Intelligence Layer (characterises normal behaviour)
+│       └── behaviour/       # Operational profiles + statistical baselines (Iteration A)
+├── tests/                   # pytest unit tests mirroring src/preprocessing/
+├── pyproject.toml           # Packaging, dependencies, ruff/mypy/pytest config
+├── requirements.txt         # Pinned runtime mirror
+└── requirements-dev.txt     # Pinned dev tooling mirror
 ```
 
 ---
 
-## Dataset Description
+## Installation
 
-The current system uses **synthetic data** to simulate the behavior of a plastic injection machine.
+Requires Python ≥ 3.11.
 
-### Variables:
+```bash
+python -m venv .venv && .venv\Scripts\activate   # Windows
+# source .venv/bin/activate                       # Unix
 
-* Material Temperature
-* Mold Temperature
-* Injecction Pressure
-* Manteinance Pressure
-* Cavity Pressure
-* Injection Velocity
-* Screw Position
-* Injection Time
-* Cooling Time
-* Cycle Time
-* Cycle count
-* Specific Volume
-* Machine stops
-* Energy consumption
+pip install -e ".[dev]"      # editable install + dev tooling
+pre-commit install           # enable ruff/mypy/gitleaks hooks
+```
 
-### Data Characteristics:
+The editable install puts `src` on the import path, so `import src...` and the
+`python -m src...` commands below work from any working directory — no
+`sys.path` manipulation required.
 
-* Normal operating patterns are simulated
-* Controlled anomalies are introduced manually
-* Time-series behavior allows pattern recognition
+---
 
-This approach enables rapid experimentation before integrating real industrial data.
+## Usage
+
+```bash
+# Generate the synthetic dataset → data/raw/dataset_pro.csv
+python src/data_generation.py
+
+# Run individual preprocessing stages (append --no-write for diagnostic-only)
+python -m src.preprocessing.cleaning.run_cleaning
+python -m src.preprocessing.time_series.run_ts_engineering
+python -m src.preprocessing.feature_engineering.run_feature_engineering
+python -m src.preprocessing.datasets.run_datasets
+
+# Or drive stages through the shim
+python -m src.preprocessing --stage cleaning      # default
+python -m src.preprocessing --stage features      # cleaning → ts → fe
+python -m src.preprocessing --stage all           # cleaning → ts → fe → datasets
+
+# Refresh the schema-lock contract after an intentional master-schema change
+python -m src.preprocessing.datasets.run_datasets --write-schema-lock   # commit configs/schema_lock.json
+```
+
+Chained `--stage` modes (`features`, `all`) accept only the universal flags
+`--no-write` and `--log-level`; stage-specific flags require a single `--stage`.
+
+### Development
+
+```bash
+ruff check .          # lint
+ruff format .         # format
+mypy src              # type-check (lenient baseline)
+pytest                # unit tests
+```
+
+---
+
+## Dataset
+
+The MVP uses two data lineages:
+
+* **Synthetic** (`data_generation.py` → `dataset_pro.csv`) — simulated injection
+  telemetry (temperatures, pressures, cycle/injection/cooling times, injection
+  velocity, screw position, specific volume, energy consumption) with controlled
+  anomaly injection. Target: `machine_state` ∈ {normal, warning, anomaly}.
+* **Real pellet-granulation line** (`Dades_pellet.csv`) — the dataset the
+  preprocessing pipeline runs on end-to-end. Its column schema is documented
+  privately (see `.claude/CLAUDE.local.md`).
+
+Raw data is read-only and git-ignored; processed/feature/dataset artifacts are
+generated locally by the pipeline.
 
 ---
 
 ## Tech Stack
 
-* Python
-* Pandas
-* NumPy
-* Matplotlib
-* Seaborn
-* Scikit-learn
-* Jupyter Notebook
-* Git & GitHub
-
----
-
-## Roadmap
-
-### Month 1 — Data & Understanding
-
-* Define machine variables
-* Generate synthetic dataset
-* Explore and clean data
-* Identify patterns
-
-### Month 2 — First Functional System
-
-* Implement anomaly detection model
-* Generate interpretable outputs
-* Build initial visualizations
-
-### Month 3 — Consolidation
-
-* Improve robustness
-* Reduce false positives
-* Prepare demo
-* Finalize documentation
-
----
-
-## Expected Outcome
-
-> "A small system capable of analyzing injection machine data and detecting anomalies before failures occur."
-
----
-
-## Long-Term Vision
-
-InjexCore aims to evolve into a **real predictive maintenance platform** for industrial environments, with:
-
-* Real-time data integration
-* Advanced machine learning models
-* Scalable architecture (SaaS)
-* Industrial deployment capabilities
+Python · pandas · NumPy · pydantic · PyYAML · pyarrow · scikit-learn (modeling
+layer) · matplotlib / seaborn · pytest · ruff · mypy · pre-commit.
 
 ---
 
 ## Status
 
-Work in progress — early-stage MVP
+Preprocessing layer complete (four stages, semantic-driven, with unit tests and
+per-stage reference docs). In progress: anomaly-criterion definition. Not
+started: the classification/anomaly models (`src/models/`), output API, and
+visualization dashboard.
 
 ---
 
 ## Contributing
 
-This is currently a personal project. Contributions may be opened in later stages.
-
----
+Currently a personal project. Contributions may open in later stages.
 
 ## Contact
 
-Created by Lluís Sagué
-Feel free to connect or reach out for collaboration or feedback.
+Created by Lluís Sagué — open to collaboration and feedback.

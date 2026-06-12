@@ -2,7 +2,7 @@
 #
 # All thresholds, ratio definitions and per-column overrides for the
 # feature engineering pipeline. Tune here, never in code. Loaded by
-# src/data/feature_engineering/policy.py via pydantic.
+# src/preprocessing/feature_engineering/policy.py via pydantic.
 #
 # Inputs: data/features/Dades_pellet_features.parquet (the time-series
 # engineering output). Outputs: data/features/Dades_pellet_engineered.parquet

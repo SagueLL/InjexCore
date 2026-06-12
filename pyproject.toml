@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "injexcore"
+version = "0.1.0"
+description = "Predictive-maintenance preprocessing pipeline for plastic injection moulding machines."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    # Runtime libraries actually imported by the preprocessing pipeline.
+    # Lower bound + major-version upper guard for reproducibility.
+    "pandas>=2.2,<4",
+    "numpy>=1.26,<3",
+    "pydantic>=2.7,<3",
+    "pyyaml>=6.0.1,<7",
+    "pyarrow>=15,<30",
+    "matplotlib>=3.8,<4",
+    "seaborn>=0.13,<1",
+]
+
+[project.optional-dependencies]
+# Modeling/intelligence layer. Required by the Iteration B intelligence
+# components (pca, anomaly) and their tests; kept out of the core install
+# so preprocessing-only use stays light. Install with: pip install -e ".[models]"
+models = [
+    "scikit-learn>=1.4,<2",
+    "joblib>=1.4,<2",
+]
+# Tooling. Install with: pip install -e ".[dev]"
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.6,<1",
+    "mypy>=1.10,<2",
+    "pre-commit>=3.7,<5",
+    "types-PyYAML>=6,<7",
+    # pandas-stubs intentionally omitted for now: with it installed mypy flags
+    # many false positives on this pandas-heavy code (rolling overloads, index
+    # dtypes). Lenient baseline treats pandas as untyped; add stubs back when
+    # tightening typing module-by-module.
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",   # line length is owned by the formatter; long strings / aligned
+              # data tables in scripts are intentional and left as-is.
+    "UP042",  # Severity uses the (str, Enum) idiom intentionally; StrEnum
+              # migration is out of scope for this no-behavior-change refactor.
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+# Pydantic's mypy plugin teaches mypy that ``Field(...)`` (incl. positional
+# defaults and numeric constraints like ``ge=``/``le=``) and
+# ``default_factory=Model`` produce a no-arg-constructible model — without it,
+# constrained policy submodels are wrongly flagged as needing arguments.
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Synthetic-data generator (MVP scaffolding, to be superseded by real-machine
+# ingestion). Its numpy-random int/float reassignments are noisy under mypy;
+# scoped exemption now, tighten when the generator is revisited.
+[[tool.mypy.overrides]]
+module = "src.data_generation.generate"
+disable_error_code = ["assignment"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
