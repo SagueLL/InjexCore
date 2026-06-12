@@ -23,6 +23,10 @@ DATASETS_DIR: Path = DATA_DIR / "datasets"
 # Sits past the preprocessing chain: fed by data/datasets/, consumed by the
 # future src/models/ predictive estimators.
 INTELLIGENCE_DIR: Path = DATA_DIR / "intelligence"
+# External operational-context sources (BOM / production orders, ...).
+# Contextual datasets joined against the master timeline; never inputs to
+# model fitting until explicitly promoted.
+CONTEXT_DIR: Path = DATA_DIR / "context"
 
 CONFIGS_DIR: Path = PROJECT_ROOT / "configs"
 
@@ -34,5 +38,6 @@ __all__ = [
     "FEATURES_DIR",
     "DATASETS_DIR",
     "INTELLIGENCE_DIR",
+    "CONTEXT_DIR",
     "CONFIGS_DIR",
 ]

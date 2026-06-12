@@ -9,6 +9,7 @@ docs/
 ├── README.md          # this index
 ├── pipeline/          # technical reference for each pipeline stage (how it works)
 ├── intelligence/      # Intelligence Layer reference docs (behaviour, anomaly, …)
+├── context/           # external operational-context layer docs (BOM, …)
 ├── project-state/     # versioned MASTER_VERSION snapshots (point-in-time truth)
 └── proposals/         # improvement proposals, RFCs, planning ahead of a version
 ```
@@ -41,6 +42,16 @@ The layer past preprocessing: it characterises normal machine behaviour and
 | PCA Intelligence (per-profile multivariate structure, T²/Q scoring) | [intelligence/pca_intelligence.md](intelligence/pca_intelligence.md) |
 | Anomaly Intelligence v1 (four explainable detectors + severity) | [intelligence/anomaly_intelligence.md](intelligence/anomaly_intelligence.md) |
 
+## context/ — external operational context
+
+Contextual and analytical layers built from external data sources. They
+enrich interpretation of the Intelligence-Layer outputs but never modify
+model fitting or scoring.
+
+| Component | Doc |
+|---|---|
+| BOM Operational Context (orders, recipes, signatures, master-aligned timeline) | [context/bom_context.md](context/bom_context.md) |
+
 ## project-state/ — versioned snapshots
 
 Authoritative, point-in-time consolidations produced by the
@@ -66,6 +77,7 @@ version transition. Not authoritative state; they record what *should* change.
 |---|---|---|
 | A reference for how a pipeline stage / component works | `pipeline/` | `lower_snake_case.md` |
 | A reference for an Intelligence Layer component | `intelligence/` | `lower_snake_case.md` |
+| A reference for an external-context component | `context/` | `lower_snake_case.md` |
 | A point-in-time project-state snapshot | `project-state/` | `MASTER_VERSION_vN.md` |
 | A proposal, RFC, or pre-version plan | `proposals/` | `IMPROVEMENT_PROPOSALS_vN.md` / `RFC_<topic>.md` |
 
