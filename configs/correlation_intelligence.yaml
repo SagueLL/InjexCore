@@ -1,0 +1,47 @@
+# Correlation Intelligence policy.
+#
+# Validated against src/intelligence/correlation/policy.py (StrictModel:
+# unknown keys raise). Fitted on the leakage-safe training window persisted
+# by Behaviour Intelligence (profile_labels.parquet is_train flag) — this
+# component never recomputes the split.
+
+features:
+  # process_sensor -> the ~17 raw process signals from the semantic
+  # catalogue (default; interpretable 17x17 matrices). Switch to `explicit`
+  # + include_columns to analyse engineered features (e.g. for redundancy
+  # pruning of the 566-column space) — expect trivially redundant
+  # base<->rolling pairs to dominate in that mode.
+  source: process_sensor
+  include_columns: []
+  exclude_columns: []
+  min_non_null_fraction: 0.7
+
+profiles:
+  # Profiles with fewer training rows are skipped and reported.
+  min_samples_per_profile: 200
+  exclude_profiles: [unknown]
+  # Pool all rows into a __global__ pseudo-profile IN ADDITION to the
+  # per-profile fits. Off by default: it mixes operational regimes.
+  global_fallback: false
+
+thresholds:
+  # Pairwise min_periods: cells with fewer joint observations are NaN.
+  min_valid_observations: 200
+  # Features whose training std (within the profile) falls below this are
+  # excluded as near-constant.
+  near_constant_std: 1.0e-9
+  # |pearson| at or above this lands in strong_pairs.parquet.
+  strong_threshold: 0.8
+  # Both |pearson| AND |spearman| at or above this lands in
+  # redundant_pairs.parquet (joint requirement avoids outlier-inflated hits).
+  redundancy_threshold: 0.95
+  # Features missing more than this fraction within the profile's training
+  # rows are excluded as too sparse.
+  max_missing_fraction: 0.3
+
+shift:
+  # Train-vs-validation correlation deltas. Diagnostics only — flagged
+  # pairs become AWARE findings, never operational alerts.
+  enabled: true
+  top_k: 20
+  delta_threshold: 0.2
