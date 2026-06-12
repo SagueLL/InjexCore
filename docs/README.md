@@ -37,9 +37,9 @@ The layer past preprocessing: it characterises normal machine behaviour and
 | Component | Doc |
 |---|---|
 | Behaviour Intelligence (profiles + baselines) | [intelligence/behaviour_intelligence.md](intelligence/behaviour_intelligence.md) |
-
-> Correlation Intelligence and PCA (Iteration B), then anomaly scoring, get a
-> sibling doc here as they are built.
+| Correlation Intelligence (per-profile relationships + shift diagnostics) | [intelligence/correlation_intelligence.md](intelligence/correlation_intelligence.md) |
+| PCA Intelligence (per-profile multivariate structure, T²/Q scoring) | [intelligence/pca_intelligence.md](intelligence/pca_intelligence.md) |
+| Anomaly Intelligence v1 (four explainable detectors + severity) | [intelligence/anomaly_intelligence.md](intelligence/anomaly_intelligence.md) |
 
 ## project-state/ — versioned snapshots
 
