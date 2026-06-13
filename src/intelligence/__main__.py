@@ -28,6 +28,8 @@ from collections.abc import Callable
 from src.intelligence.anomaly.run_anomaly import main as anomaly_main
 from src.intelligence.behaviour.run_behaviour import main as behaviour_main
 from src.intelligence.correlation.run_correlation import main as correlation_main
+from src.intelligence.drift.run_drift import main as drift_main
+from src.intelligence.incidents.run_incidents import main as incidents_main
 from src.intelligence.pca.run_pca import main as pca_main
 from src.intelligence.sensor_health.run_sensor_health import main as sensor_health_main
 
@@ -39,6 +41,8 @@ _COMPONENTS: dict[str, Callable[[list[str] | None], int]] = {
     "pca": pca_main,
     "anomaly": anomaly_main,
     "sensor-health": sensor_health_main,
+    "drift": drift_main,
+    "incidents": incidents_main,
 }
 _DEFAULT_COMPONENT = "behaviour"
 

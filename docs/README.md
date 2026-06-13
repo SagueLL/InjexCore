@@ -42,6 +42,8 @@ The layer past preprocessing: it characterises normal machine behaviour and
 | PCA Intelligence (per-profile multivariate structure, T²/Q scoring) | [intelligence/pca_intelligence.md](intelligence/pca_intelligence.md) |
 | Anomaly Intelligence v1 (four explainable detectors + severity) | [intelligence/anomaly_intelligence.md](intelligence/anomaly_intelligence.md) |
 | Sensor Health Intelligence v1 (instrumentation-anomaly rules + quarantine recommendations) | [intelligence/sensor_health_intelligence.md](intelligence/sensor_health_intelligence.md) |
+| Drift Intelligence v1 (windowed drift vs train reference; raw vs healthy-only views) | [intelligence/drift_intelligence.md](intelligence/drift_intelligence.md) |
+| Incident Aggregation v1 (events → reviewable incidents + drift-aware forensic addendum) | [intelligence/incident_aggregation.md](intelligence/incident_aggregation.md) |
 
 ## context/ — external operational context
 

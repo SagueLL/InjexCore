@@ -13,12 +13,23 @@ def test_all_components_registered() -> None:
         "pca",
         "anomaly",
         "sensor-health",
+        "drift",
+        "incidents",
     }
     assert all(callable(main) for main in _COMPONENTS.values())
 
 
 @pytest.mark.parametrize(
-    "component", ["behaviour", "correlation", "pca", "anomaly", "sensor-health"]
+    "component",
+    [
+        "behaviour",
+        "correlation",
+        "pca",
+        "anomaly",
+        "sensor-health",
+        "drift",
+        "incidents",
+    ],
 )
 def test_component_arg_extracted_and_rest_forwarded(component: str) -> None:
     name, rest = _split_component_arg(
