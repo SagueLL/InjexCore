@@ -15,6 +15,8 @@ def test_all_components_registered() -> None:
         "sensor-health",
         "drift",
         "incidents",
+        "reference",
+        "scoring-experiment",
     }
     assert all(callable(main) for main in _COMPONENTS.values())
 
@@ -29,6 +31,8 @@ def test_all_components_registered() -> None:
         "sensor-health",
         "drift",
         "incidents",
+        "reference",
+        "scoring-experiment",
     ],
 )
 def test_component_arg_extracted_and_rest_forwarded(component: str) -> None:

@@ -44,6 +44,8 @@ The layer past preprocessing: it characterises normal machine behaviour and
 | Sensor Health Intelligence v1 (instrumentation-anomaly rules + quarantine recommendations) | [intelligence/sensor_health_intelligence.md](intelligence/sensor_health_intelligence.md) |
 | Drift Intelligence v1 (windowed drift vs train reference; raw vs healthy-only views) | [intelligence/drift_intelligence.md](intelligence/drift_intelligence.md) |
 | Incident Aggregation v1 (events → reviewable incidents + drift-aware forensic addendum) | [intelligence/incident_aggregation.md](intelligence/incident_aggregation.md) |
+| Reference Governance v1 (current/candidate references + quarantine proposals, pending review) | [intelligence/reference_governance.md](intelligence/reference_governance.md) |
+| Controlled Scoring Experiment v1 (interpretive scenarios + decision report) | [intelligence/controlled_scoring_experiment.md](intelligence/controlled_scoring_experiment.md) |
 
 ## context/ — external operational context
 

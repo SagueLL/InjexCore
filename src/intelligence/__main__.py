@@ -4,7 +4,8 @@ Runs an Intelligence-Layer component from a single entry point. Components
 register their ``main`` in ``_COMPONENTS`` and get a ``--component`` value
 for free. The expected execution order mirrors the artifact dependencies::
 
-    behaviour → correlation / pca → anomaly
+    behaviour → correlation / pca → anomaly → drift → incidents
+              → reference → scoring-experiment
 
 Usage::
 
@@ -13,6 +14,8 @@ Usage::
     python -m src.intelligence --component correlation --no-write --log-level DEBUG
     python -m src.intelligence --component pca
     python -m src.intelligence --component anomaly --pca-run latest
+    python -m src.intelligence --component reference
+    python -m src.intelligence --component scoring-experiment --no-write
 
 Flags after ``--component X`` are forwarded verbatim to that component's own
 CLI — e.g. ``python -m src.intelligence.pca.run_pca --help`` lists the pca
@@ -31,6 +34,10 @@ from src.intelligence.correlation.run_correlation import main as correlation_mai
 from src.intelligence.drift.run_drift import main as drift_main
 from src.intelligence.incidents.run_incidents import main as incidents_main
 from src.intelligence.pca.run_pca import main as pca_main
+from src.intelligence.reference.run_reference import main as reference_main
+from src.intelligence.scoring_experiment.run_scoring_experiment import (
+    main as scoring_experiment_main,
+)
 from src.intelligence.sensor_health.run_sensor_health import main as sensor_health_main
 
 # Registry: component name -> its ``main(argv) -> int`` entry point.
@@ -43,6 +50,8 @@ _COMPONENTS: dict[str, Callable[[list[str] | None], int]] = {
     "sensor-health": sensor_health_main,
     "drift": drift_main,
     "incidents": incidents_main,
+    "reference": reference_main,
+    "scoring-experiment": scoring_experiment_main,
 }
 _DEFAULT_COMPONENT = "behaviour"
 
