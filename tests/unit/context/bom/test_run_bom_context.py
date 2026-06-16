@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import types
 from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from src.context.bom import io, run_bom_context
+from src.context.bom.policy import ForensicAddendumPolicy
+from src.context.bom.validation import BomContextBlockerError
 
 _CONFIG_YAML = """
 timeline:
@@ -127,7 +131,6 @@ def test_expected_rows_gate_blocks_mismatched_master(
     strict.write_text(_CONFIG_YAML.replace("null", "12345"), encoding="utf-8")
     args = list(cli_env["args"])
     args[args.index("--config") + 1] = str(strict)
-    from src.context.bom.validation import BomContextBlockerError
 
     with pytest.raises(BomContextBlockerError, match="12345"):
         run_bom_context.main([*args, "--no-write"])
@@ -141,3 +144,96 @@ def test_deterministic_outputs_across_runs(cli_env: dict) -> None:
         left = pd.read_parquet(root / "a" / rel)
         right = pd.read_parquet(root / "b" / rel)
         pd.testing.assert_frame_equal(left, right)
+
+
+# --- CTX-01: Stage H addendum run overrides + fail-closed resolution ---------
+
+
+def _write_run(root: Path, run_id: str, manifest_name: str, component: str) -> Path:
+    """Write a tiny *completed* run (manifest last) under ``root/runs/<id>/``."""
+    d = root / "runs" / run_id
+    d.mkdir(parents=True)
+    (d / manifest_name).write_text(
+        json.dumps(
+            {"component": component, "run_id": run_id, "completion_status": "complete"}
+        ),
+        encoding="utf-8",
+    )
+    return d
+
+
+@pytest.fixture
+def addendum_world(tmp_path: Path) -> dict:
+    """Synthetic anomaly + forensic runs and a forensic-addendum policy pin."""
+    anom_root = tmp_path / "anomaly"
+    for_root = tmp_path / "forensics"
+    _write_run(anom_root, "anom_pin", "anomaly_fit_manifest.json", "anomaly")
+    _write_run(anom_root, "anom_override", "anomaly_fit_manifest.json", "anomaly")
+    # Forensic component string is not uniform across writers -> not checked.
+    _write_run(for_root, "for_pin", "forensic_manifest.json", "forensics")
+    _write_run(for_root, "for_override", "forensic_manifest.json", "forensics")
+    fa = ForensicAddendumPolicy(
+        enabled=True,
+        anomaly_root=str(anom_root),
+        anomaly_run_id="anom_pin",
+        forensic_root=str(for_root),
+        forensic_run_id="for_pin",
+    )
+    return {"policy": types.SimpleNamespace(forensic_addendum=fa)}
+
+
+def _addendum_args(**overrides: object) -> argparse.Namespace:
+    base = {"skip_addendum": False, "anomaly_run": None, "forensic_run": None}
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+def test_bom_cli_overrides_parsed() -> None:
+    args = run_bom_context._parse_args(["--anomaly-run", "A", "--forensic-run", "F"])
+    assert args.anomaly_run == "A"
+    assert args.forensic_run == "F"
+    assert run_bom_context._parse_args([]).anomaly_run is None
+    assert run_bom_context._parse_args([]).forensic_run is None
+
+
+def test_bom_config_pin_used_when_no_override(addendum_world: dict) -> None:
+    anomaly_dir, forensic_dir = run_bom_context._resolve_addendum_dirs(
+        addendum_world["policy"], _addendum_args()
+    )
+    assert anomaly_dir is not None and anomaly_dir.name == "anom_pin"
+    assert forensic_dir is not None and forensic_dir.name == "for_pin"
+
+
+def test_bom_override_beats_config_pin(addendum_world: dict) -> None:
+    anomaly_dir, forensic_dir = run_bom_context._resolve_addendum_dirs(
+        addendum_world["policy"],
+        _addendum_args(anomaly_run="anom_override", forensic_run="for_override"),
+    )
+    assert anomaly_dir is not None and anomaly_dir.name == "anom_override"
+    assert forensic_dir is not None and forensic_dir.name == "for_override"
+
+
+def test_bom_skip_addendum_requires_no_override(addendum_world: dict) -> None:
+    anomaly_dir, forensic_dir = run_bom_context._resolve_addendum_dirs(
+        addendum_world["policy"], _addendum_args(skip_addendum=True)
+    )
+    assert anomaly_dir is None and forensic_dir is None
+
+
+def test_bom_stale_pin_fails_closed(addendum_world: dict) -> None:
+    addendum_world["policy"].forensic_addendum.anomaly_run_id = "does-not-exist"
+    with pytest.raises(BomContextBlockerError) as exc:
+        run_bom_context._resolve_addendum_dirs(
+            addendum_world["policy"], _addendum_args()
+        )
+    assert "--anomaly-run" in str(exc.value)
+    assert "does-not-exist" in str(exc.value)
+
+
+def test_bom_valid_override_selects_addendum_path(addendum_world: dict) -> None:
+    addendum_world["policy"].forensic_addendum.anomaly_run_id = "does-not-exist"
+    anomaly_dir, forensic_dir = run_bom_context._resolve_addendum_dirs(
+        addendum_world["policy"], _addendum_args(anomaly_run="anom_override")
+    )
+    assert anomaly_dir is not None and anomaly_dir.name == "anom_override"
+    assert forensic_dir is not None and forensic_dir.name == "for_pin"

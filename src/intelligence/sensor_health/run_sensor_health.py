@@ -42,6 +42,7 @@ from src.intelligence._common.upstream import (
     DEFAULT_BEHAVIOUR_MANIFEST,
     DEFAULT_PROFILE_LABELS,
     align_labels,
+    behaviour_provenance,
     load_baselines,
     load_behaviour_manifest,
     load_profile_labels,
@@ -117,7 +118,7 @@ def _build_manifest(
         "master_dataset_sha256": file_sha256(paths["master"]),
         "behaviour_artifact_path": str(behaviour_dir),
         "behaviour_fingerprint": dataset_fingerprint(labels_frame, labels_p),
-        "behaviour_fit_timestamp": behaviour_manifest.get("fit_timestamp"),
+        **behaviour_provenance(behaviour_dir, behaviour_manifest),
         "sensor_scope": sensors,
         "train_window": behaviour_manifest.get("fit_window"),
         "validation_window": {

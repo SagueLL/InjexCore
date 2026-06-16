@@ -99,6 +99,8 @@ def world(tmp_path: Path) -> dict:
                     "train_end": str(ts[299]),
                 },
                 "fit_timestamp": "2026-01-01T00:00:00+00:00",
+                "created_at": "2026-01-01T00:01:00+00:00",
+                "master_dataset_sha256": "beh-sha-1",
             }
         ),
         encoding="utf-8",
@@ -194,6 +196,14 @@ def test_default_labels_resolve_latest_behaviour_run(
         beh_run / beh_io.PROFILE_LABELS_FILE
     )
     assert art.manifest["behaviour_fingerprint"]["sha256"]
+    # PROV-01: explicit behaviour provenance recorded without inference.
+    assert art.manifest["behaviour_run_id"] == "b1"
+    assert art.manifest["behaviour_manifest_path"] == str(
+        beh_run / beh_io.MANIFEST_NAME
+    )
+    assert art.manifest["behaviour_created_at"] == "2026-01-01T00:01:00+00:00"
+    assert art.manifest["behaviour_fit_timestamp"] == "2026-01-01T00:00:00+00:00"
+    assert art.manifest["behaviour_master_dataset_sha256"] == "beh-sha-1"
 
 
 def test_manifest_written_last_failed_run_not_resolvable(

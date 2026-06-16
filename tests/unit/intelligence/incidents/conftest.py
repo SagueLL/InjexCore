@@ -332,7 +332,9 @@ def incidents_world(tmp_path: Path) -> dict[str, Any]:
         bom_run / "orders" / "bom_order_transitions.parquet",
     )
     _manifest(
-        bom_run, "bom_context_manifest.json", {"component": "bom", "run_id": "b1"}
+        bom_run,
+        "bom_context_manifest.json",
+        {"component": "bom_context", "run_id": "b1"},
     )
 
     config_path = tmp_path / "incidents.yaml"

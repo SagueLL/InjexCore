@@ -27,14 +27,25 @@ def chain_inputs(tmp_path: Path, labeled_frame, baselines_factory, groups):
     master = tmp_path / "master_dataset.parquet"
     df.reset_index().to_parquet(master, index=False)
 
-    labels_path = tmp_path / "profile_labels.parquet"
+    # Run-versioned behaviour layout so the leaf manifest records a real
+    # behaviour_run_id (PROV-01).
+    beh_run = tmp_path / "behaviour" / "runs" / "beh1"
+    (beh_run / "profiles").mkdir(parents=True)
+    labels_path = beh_run / "profiles" / "profile_labels.parquet"
     pd.DataFrame(
         {"profile": labels, "is_train": train_mask.astype("int8")}
     ).reset_index().to_parquet(labels_path, index=False)
 
-    manifest_path = tmp_path / "behaviour_fit_manifest.json"
+    manifest_path = beh_run / "behaviour_fit_manifest.json"
     manifest_path.write_text(
-        json.dumps({"fit_timestamp": "t0", "fit_window": {"n_train": 80}}),
+        json.dumps(
+            {
+                "fit_timestamp": "t0",
+                "created_at": "c0",
+                "master_dataset_sha256": "beh-sha-1",
+                "fit_window": {"n_train": 80},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -140,8 +151,14 @@ def test_write_run_full_schema_and_artifacts(chain_inputs) -> None:
 
     manifest = json.loads((out / io.MANIFEST_NAME).read_text(encoding="utf-8"))
     assert manifest["component"] == "anomaly"
-    assert manifest["upstream"]["pca_run_id"] == "pcarun"
-    assert manifest["upstream"]["pca_fingerprint_matches"] is True
+    up = manifest["upstream"]
+    assert up["pca_run_id"] == "pcarun"
+    assert up["pca_fingerprint_matches"] is True
+    assert up["behaviour_run_id"] == "beh1"
+    assert up["behaviour_manifest_path"].endswith("behaviour_fit_manifest.json")
+    assert up["behaviour_created_at"] == "c0"
+    assert up["behaviour_fit_timestamp"] == "t0"
+    assert up["behaviour_master_dataset_sha256"] == "beh-sha-1"
     assert "profile_a" in manifest["severity_thresholds"]
 
     mdir = io.model_dir(out, "profile_a")

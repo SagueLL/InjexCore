@@ -11,6 +11,7 @@ docs/
 ├── pipeline/          # technical reference for each pipeline stage (how it works)
 ├── intelligence/      # Intelligence Layer reference docs (behaviour, anomaly, …)
 ├── context/           # external operational-context layer docs (BOM, …)
+├── dashboard/         # dashboard consumption contract (read-only, lineage-validated)
 ├── project-state/     # versioned MASTER_VERSION snapshots (point-in-time truth)
 └── proposals/         # improvement proposals, RFCs, planning ahead of a version
 ```
@@ -65,6 +66,16 @@ model fitting or scoring.
 | BOM Operational Context (orders, recipes, signatures, master-aligned timeline) | [context/bom_context.md](context/bom_context.md) |
 | Operational Context Overlay (profile + steam + sensor-health + BOM per timestamp) | [context/operational_context.md](context/operational_context.md) |
 
+## dashboard/ — consumption contract
+
+The read-only contract a future Technical Validation Dashboard consumes. Pins
+the canonical rematerialized chain, enumerates allowed artifacts and forbidden
+views, and is enforced by the lineage validator in [`src/dashboard/`](../src/dashboard/).
+
+| Doc | Covers |
+|---|---|
+| [dashboard/dashboard_data_contract.md](dashboard/dashboard_data_contract.md) | Canonical run pins, allowed artifact groups (purpose/safe/unsafe/warning), forbidden MVP views, required warning copy, read-only / no-approval / no-refit boundaries. |
+
 ## project-state/ — versioned snapshots
 
 Authoritative, point-in-time consolidations produced by the
@@ -91,6 +102,7 @@ version transition. Not authoritative state; they record what *should* change.
 | A reference for how a pipeline stage / component works | `pipeline/` | `lower_snake_case.md` |
 | A reference for an Intelligence Layer component | `intelligence/` | `lower_snake_case.md` |
 | A reference for an external-context component | `context/` | `lower_snake_case.md` |
+| A dashboard / consumption contract | `dashboard/` | `lower_snake_case.md` |
 | A point-in-time project-state snapshot | `project-state/` | `MASTER_VERSION_vN.md` |
 | A proposal, RFC, or pre-version plan | `proposals/` | `IMPROVEMENT_PROPOSALS_vN.md` / `RFC_<topic>.md` |
 

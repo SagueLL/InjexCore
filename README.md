@@ -189,14 +189,20 @@ Drift, Incident Aggregation, Reference Governance and the Controlled Scoring
 Experiment — plus the BOM and Operational external-context layers. Every
 Intelligence/Context component is run-versioned (manifest-last) with fail-closed
 lineage checks, covered by unit + integration tests and per-component reference
-docs.
+docs. A **read-only dashboard consumption contract + lineage validator**
+([`src/dashboard/`](src/dashboard/),
+[docs/dashboard/dashboard_data_contract.md](docs/dashboard/dashboard_data_contract.md))
+pins the canonical rematerialized chain and refuses stale / non-canonical /
+broken chains. The system is ready for **technical validation dashboard
+planning, not production deployment**.
 
 **In progress:** human review of the Iteration C decision report (the pending
 `inlet_hopper_points` quarantine approval and the deferred Reference v2
-candidate). **Not started:** an *approved* Reference v2 (human-gated refit) and a
-true PCA/Mahalanobis rescoring — both explicitly deferred and gated on the
-decision report; predictive models (`src/models/`), output API, and the
-visualization dashboard.
+candidate). **Not started:** the read-only Technical Validation Dashboard MVP
+(contract + validator in place; UI not started); an *approved* Reference v2
+(human-gated refit) and a true PCA/Mahalanobis rescoring — both explicitly
+deferred and gated on the decision report; predictive models (`src/models/`),
+output API, and the visualization dashboard.
 
 ---
 

@@ -167,10 +167,49 @@ Across Sensor Health, Incidents, Reference Governance and Controlled Scoring:
   not a true rescoring.
 - Real-time/streaming inference, alert delivery and a serving API are not built.
 
-## 10. Where dashboards / Reference v2 fit later
+## 10. Dashboard consumption contract (read-only)
 
-- A **dashboard** would read the persisted review pack, drift summaries and the
-  decision report read-only — no new fitting; it slots after Controlled Scoring.
+The Technical Validation Dashboard consumes the persisted artifacts of the
+**canonical rematerialized chain** read-only — no new fitting, no mutation:
+
+```
+canonical_run_id = remat-v1-20260616T102558Z   # all intelligence + operational
+bom_run_id        = 20260612T124909Z            # BOM context
+```
+
+- **Narrative contract:** [../dashboard/dashboard_data_contract.md](../dashboard/dashboard_data_contract.md)
+  — allowed artifact groups (purpose/safe/unsafe/warning), forbidden MVP views,
+  required warning copy, and the read-only / no-approval / no-refit boundaries.
+- **Executable contract:** [`src/dashboard/`](../../src/dashboard/) —
+  `validate_dashboard_chain(run_id, bom_run_id)` resolves every component's
+  pinned run (reusing `runs.is_completed_run`), returns
+  `is_valid`/`severity`/`warnings`/`component_statuses`/`lineage_edges`/`canonical_match`,
+  fails closed on missing/wrong-component/wrong-id manifests, and surfaces
+  non-canonical/stale runs as warnings. **Run-selector rule:** only the
+  canonical, lineage-valid chain is shown as valid; everything else is stale or
+  hidden. The validator never writes.
+
+### Lineage provenance (LINEAGE-01 / PROV-01)
+
+- Every cross-component consumer now passes `expected_component` to
+  `resolve_run` (drift, incidents, reference, scoring, operational, bom, plus
+  anomaly's pca resolution), so a right-shaped but wrong-component run is
+  rejected at the **consumer boundary**, not silently consumed. The manifest
+  `component` strings are **not uniform** (`reference_governance`,
+  `operational_context`, `bom_context`, `controlled_scoring_experiment`).
+- The leaf manifests (correlation, pca, anomaly, sensor_health) now record
+  explicit behaviour provenance: `behaviour_run_id`, `behaviour_manifest_path`,
+  `behaviour_created_at`, `behaviour_fit_timestamp`,
+  `behaviour_master_dataset_sha256`. The **current canonical manifests predate
+  this** and lack those fields, so the validator degrades them to a *warning*
+  (the chain stays usable); the next rematerialization refreshes them.
+- The operational/BOM forensic addenda accept `--anomaly-run` / `--forensic-run`
+  overrides and **fail closed** on stale/unresolvable pins, so they can be
+  regenerated against the canonical chain (the operational addendum is not
+  present for `remat` until regenerated).
+
+### Reference v2 / true rescoring (still deferred)
+
 - **Reference v2** would be a new, human-approved behaviour-style fit on a
   post-fault window excluding the quarantined channel, producing a new behaviour
   run that the existing run-versioning + lineage contracts already accommodate.

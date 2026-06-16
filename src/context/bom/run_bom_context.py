@@ -319,6 +319,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip the Stage H BOM-aware forensic addendum.",
     )
+    p.add_argument(
+        "--anomaly-run",
+        default=None,
+        help=(
+            "Anomaly run id for the Stage H addendum (default: policy pin; "
+            "'latest' supported). Lets the addendum be regenerated against the "
+            "canonical rematerialized chain. Ignored with --skip-addendum."
+        ),
+    )
+    p.add_argument(
+        "--forensic-run",
+        default=None,
+        help=(
+            "Forensic run id for the Stage H addendum (default: policy pin; "
+            "'latest' supported). Ignored with --skip-addendum."
+        ),
+    )
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
 
@@ -352,22 +369,63 @@ def _write_artifacts(out: Path, art: BomContextArtifacts) -> list[str]:
     ]
 
 
+def _resolve_addendum_run(
+    root: str,
+    run_id: str,
+    manifest_name: str,
+    *,
+    kind: str,
+    expected_component: str | None = None,
+) -> Path:
+    """Resolve a Stage H upstream run, failing closed with a clear message.
+
+    The addendum must never silently consume a stale or pre-hardening run:
+    when the pinned/overridden run cannot be resolved, raise an actionable
+    error naming the run and the override flag. ``--skip-addendum`` bypasses
+    this path entirely.
+    """
+    try:
+        return io.resolve_run(
+            io.resolve_project_path(root),
+            run_id,
+            manifest_name,
+            expected_component=expected_component,
+        )
+    except FileNotFoundError as exc:
+        raise validation.BomContextBlockerError(
+            f"Stage H addendum requested but the {kind} run {run_id!r} under "
+            f"{root} is unresolvable (missing/invalid {manifest_name}). Pass "
+            f"--{kind}-run with a completed run from the canonical chain, or use "
+            "--skip-addendum."
+        ) from exc
+
+
 def _resolve_addendum_dirs(
-    policy: BomContextPolicy, skip: bool
+    policy: BomContextPolicy, args: argparse.Namespace
 ) -> tuple[Path | None, Path | None]:
-    """Resolve the pinned (or latest) anomaly + forensic runs for Stage H."""
-    if skip or not policy.forensic_addendum.enabled:
+    """Resolve the pinned (or overridden) anomaly + forensic runs for Stage H.
+
+    CLI ``--anomaly-run`` / ``--forensic-run`` override the config pin so the
+    addendum can be regenerated against the canonical rematerialized chain. The
+    forensic manifest's component string is not uniform across its writers, so
+    it is resolved without an expected_component check (see the dashboard
+    contract); the anomaly run is component-checked.
+    """
+    if args.skip_addendum or not policy.forensic_addendum.enabled:
         return None, None
     pol = policy.forensic_addendum
-    anomaly_dir = io.resolve_run(
-        io.resolve_project_path(pol.anomaly_root),
-        pol.anomaly_run_id,
+    anomaly_dir = _resolve_addendum_run(
+        pol.anomaly_root,
+        args.anomaly_run or pol.anomaly_run_id,
         "anomaly_fit_manifest.json",
+        kind="anomaly",
+        expected_component="anomaly",
     )
-    forensic_dir = io.resolve_run(
-        io.resolve_project_path(pol.forensic_root),
-        pol.forensic_run_id,
+    forensic_dir = _resolve_addendum_run(
+        pol.forensic_root,
+        args.forensic_run or pol.forensic_run_id,
         "forensic_manifest.json",
+        kind="forensic",
     )
     return anomaly_dir, forensic_dir
 
@@ -383,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
     policy = load_policy(args.config)
     csv_path = args.csv or io.resolve_project_path(policy.raw_input.csv_path)
     master_path = args.master or io.resolve_project_path(policy.timeline.master_path)
-    anomaly_dir, forensic_dir = _resolve_addendum_dirs(policy, args.skip_addendum)
+    anomaly_dir, forensic_dir = _resolve_addendum_dirs(policy, args)
     run_id = args.run_id or io.new_run_id(args.output_root)
 
     art = run(csv_path, master_path, policy, run_id, anomaly_dir, forensic_dir)

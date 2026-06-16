@@ -253,3 +253,23 @@ def test_upstream_run_divergence_is_a_blocker(incidents_world: dict[str, Any]) -
     dmanifest.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(IncidentsBlockerError, match="divergence"):
         run_incidents.main([*incidents_world["args"], "--no-write"])
+
+
+def test_wrong_component_manifest_rejected_at_boundary(
+    incidents_world: dict[str, Any],
+) -> None:
+    """LINEAGE-01: a BOM run whose manifest declares the wrong component is
+    rejected at the consumer boundary (expected_component='bom_context'),
+    not silently consumed as a BOM run."""
+    bmanifest = (
+        incidents_world["tmp_path"]
+        / "bom"
+        / "runs"
+        / "b1"
+        / "bom_context_manifest.json"
+    )
+    payload = json.loads(bmanifest.read_text(encoding="utf-8"))
+    payload["component"] = "anomaly"  # right shape, wrong component
+    bmanifest.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(FileNotFoundError):
+        run_incidents.main([*incidents_world["args"], "--no-write"])

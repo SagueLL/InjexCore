@@ -292,6 +292,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="BOM context run id (default: policy; 'latest' supported).",
     )
     p.add_argument(
+        "--anomaly-run",
+        default=None,
+        help=(
+            "Anomaly run id for the forensic addendum (default: policy pin; "
+            "'latest' supported). Lets the addendum be regenerated against the "
+            "canonical rematerialized chain. Ignored with --skip-addendum."
+        ),
+    )
+    p.add_argument(
+        "--forensic-run",
+        default=None,
+        help=(
+            "Forensic run id for the forensic addendum (default: policy pin; "
+            "'latest' supported). Ignored with --skip-addendum."
+        ),
+    )
+    p.add_argument(
         "--output-root",
         type=Path,
         default=io.OPERATIONAL_DIR,
@@ -322,6 +339,38 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def _resolve_addendum_run(
+    root: str,
+    run_id: str,
+    manifest_name: str,
+    *,
+    kind: str,
+    expected_component: str | None = None,
+) -> Path:
+    """Resolve an addendum upstream run, failing closed with a clear message.
+
+    The forensic addendum must never silently consume a stale or pre-hardening
+    run: when the pinned/overridden run cannot be resolved (missing manifest,
+    not a completed run, or wrong component), raise an actionable error naming
+    the run and the override flag rather than letting a bare ``FileNotFoundError``
+    surface. ``--skip-addendum`` bypasses this path entirely.
+    """
+    try:
+        return io.resolve_run(
+            io.resolve_project_path(root),
+            run_id,
+            manifest_name,
+            expected_component=expected_component,
+        )
+    except FileNotFoundError as exc:
+        raise validation.OperationalContextBlockerError(
+            f"Forensic addendum requested but the {kind} run {run_id!r} under "
+            f"{root} is unresolvable (missing/invalid {manifest_name}). Pass "
+            f"--{kind}-run with a completed run from the canonical chain, or use "
+            "--skip-addendum."
+        ) from exc
+
+
 def _resolve_upstream_dirs(
     policy: OperationalContextPolicy, args: argparse.Namespace
 ) -> tuple[Path, Path, Path | None, Path | None]:
@@ -331,24 +380,33 @@ def _resolve_upstream_dirs(
         io.resolve_project_path(up.sensor_health_root),
         args.sensor_health_run or up.sensor_health_run,
         io.SENSOR_HEALTH_MANIFEST,
+        expected_component="sensor_health",
     )
     bom_dir = io.resolve_run(
         io.resolve_project_path(up.bom_root),
         args.bom_run or up.bom_run,
         io.BOM_MANIFEST,
+        expected_component="bom_context",
     )
     anomaly_dir: Path | None = None
     forensic_dir: Path | None = None
     if policy.forensic_addendum.enabled and not args.skip_addendum:
-        anomaly_dir = io.resolve_run(
-            io.resolve_project_path(up.anomaly_root),
-            up.anomaly_run,
+        # CLI override beats the config pin so the addendum can be regenerated
+        # against the canonical rematerialized chain. The forensic manifest's
+        # component string is not uniform across its writers, so it is resolved
+        # without an expected_component check (see docs/dashboard contract).
+        anomaly_dir = _resolve_addendum_run(
+            up.anomaly_root,
+            args.anomaly_run or up.anomaly_run,
             "anomaly_fit_manifest.json",
+            kind="anomaly",
+            expected_component="anomaly",
         )
-        forensic_dir = io.resolve_run(
-            io.resolve_project_path(up.forensic_root),
-            up.forensic_run,
+        forensic_dir = _resolve_addendum_run(
+            up.forensic_root,
+            args.forensic_run or up.forensic_run,
             "forensic_manifest.json",
+            kind="forensic",
         )
     return sensor_health_dir, bom_dir, anomaly_dir, forensic_dir
 

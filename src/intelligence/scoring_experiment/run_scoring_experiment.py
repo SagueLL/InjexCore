@@ -298,37 +298,51 @@ def _resolve_upstream_runs(
 ) -> UpstreamRuns:
     """Resolve all six upstream runs (CLI flag > policy pin > latest)."""
     up = policy.upstream
+    # (root, run id, manifest filename, expected component) — verified at the
+    # consumer boundary so a wrong-component run fails closed (LINEAGE-01).
     spec = {
         "anomaly": (
             up.anomaly_root,
             args.anomaly_run or up.anomaly_run,
             io.ANOMALY_MANIFEST,
+            "anomaly",
         ),
         "sensor_health": (
             up.sensor_health_root,
             args.sensor_health_run or up.sensor_health_run,
             io.SENSOR_HEALTH_MANIFEST,
+            "sensor_health",
         ),
-        "drift": (up.drift_root, args.drift_run or up.drift_run, io.DRIFT_MANIFEST),
+        "drift": (
+            up.drift_root,
+            args.drift_run or up.drift_run,
+            io.DRIFT_MANIFEST,
+            "drift",
+        ),
         "incidents": (
             up.incidents_root,
             args.incidents_run or up.incidents_run,
             io.INCIDENTS_MANIFEST,
+            "incidents",
         ),
         "operational": (
             up.operational_root,
             args.operational_run or up.operational_run,
             io.OPERATIONAL_MANIFEST,
+            "operational_context",
         ),
         "reference": (
             up.reference_root,
             args.reference_run or up.reference_run,
             io.REFERENCE_MANIFEST,
+            "reference_governance",
         ),
     }
     resolved = {
-        name: io.resolve_run(io.resolve_project_path(root), run, manifest)
-        for name, (root, run, manifest) in spec.items()
+        name: io.resolve_run(
+            io.resolve_project_path(root), run, manifest, expected_component=component
+        )
+        for name, (root, run, manifest, component) in spec.items()
     }
     return UpstreamRuns(**resolved)
 

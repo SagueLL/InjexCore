@@ -183,3 +183,21 @@ def test_incomplete_upstream_run_is_not_resolvable(
     anomaly_manifest.unlink()
     with pytest.raises(FileNotFoundError, match="No completed runs"):
         run_drift.main([*drift_world["args"], "--no-write"])
+
+
+def test_wrong_component_manifest_rejected_at_boundary(
+    drift_world: dict[str, Any],
+) -> None:
+    """LINEAGE-01: an operational run whose manifest declares the wrong
+    component (not 'operational_context') is rejected at the drift consumer
+    boundary instead of being consumed as an operational-context run."""
+    omanifest = (
+        drift_world["tmp_path"]
+        / "operational"
+        / "runs"
+        / "o1"
+        / "operational_context_manifest.json"
+    )
+    _rewrite_manifest(omanifest, component="drift")  # right shape, wrong component
+    with pytest.raises(FileNotFoundError):
+        run_drift.main([*drift_world["args"], "--no-write"])
