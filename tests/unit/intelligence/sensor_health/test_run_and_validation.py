@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,8 @@ import pytest
 from src.config import PROJECT_ROOT
 from src.intelligence.__main__ import _COMPONENTS
 from src.intelligence.__main__ import main as dispatcher_main
+from src.intelligence._common import upstream
+from src.intelligence.behaviour import io as beh_io
 from src.intelligence.sensor_health import io, run_sensor_health
 from src.intelligence.sensor_health.policy import SensorHealthPolicy
 from src.intelligence.sensor_health.validation import (
@@ -151,6 +154,46 @@ def test_full_run_detects_and_recommends_quarantine(world: dict) -> None:
     ]
     assert len(flagged) == 300
     assert (flagged["active_issue_types"].str.contains("flatline_zero")).all()
+
+
+def test_default_labels_resolve_latest_behaviour_run(
+    world: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bare run (no --profile-labels): the None sentinel must resolve the
+    latest behaviour run, and the manifest must record that run's directory +
+    concrete labels file. Regression for ``_build_manifest`` crashing on
+    ``None.parent`` when latest-run resolution is used (the documented bare
+    ``--component sensor-health`` form)."""
+    d = dict(zip(world["args"][::2], world["args"][1::2], strict=False))
+
+    # Lay out a behaviour-run-shaped directory from the fixture artifacts.
+    beh_run = tmp_path / "behaviour" / "runs" / "b1"
+    (beh_run / beh_io.PROFILE_LABELS_FILE).parent.mkdir(parents=True)
+    (beh_run / beh_io.BASELINES_FILE).parent.mkdir(parents=True)
+    shutil.copy(d["--profile-labels"], beh_run / beh_io.PROFILE_LABELS_FILE)
+    shutil.copy(d["--baselines"], beh_run / beh_io.BASELINES_FILE)
+    shutil.copy(d["--behaviour-manifest"], beh_run / beh_io.MANIFEST_NAME)
+
+    # The None sentinel resolves the latest completed behaviour run.
+    monkeypatch.setattr(upstream, "resolve_behaviour_run", lambda *a, **k: beh_run)
+    monkeypatch.setattr(
+        run_sensor_health, "resolve_behaviour_run", lambda *a, **k: beh_run
+    )
+
+    art = run_sensor_health.run(
+        Path(d["--master"]),
+        Path(d["--classification"]),
+        run_sensor_health.DEFAULT_CONFIG,
+        None,  # labels_path -> default sentinel (latest resolution)
+        None,  # behaviour_manifest_path
+        None,  # baselines_path
+        "t-none",
+    )
+    assert art.manifest["behaviour_artifact_path"] == str(beh_run)
+    assert art.manifest["behaviour_fingerprint"]["source_path"] == str(
+        beh_run / beh_io.PROFILE_LABELS_FILE
+    )
+    assert art.manifest["behaviour_fingerprint"]["sha256"]
 
 
 def test_manifest_written_last_failed_run_not_resolvable(

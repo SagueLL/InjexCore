@@ -45,7 +45,9 @@ from src.intelligence._common.upstream import (
     load_baselines,
     load_behaviour_manifest,
     load_profile_labels,
+    resolve_behaviour_run,
 )
+from src.intelligence.behaviour.io import PROFILE_LABELS_FILE
 from src.intelligence.sensor_health import events as events_mod
 from src.intelligence.sensor_health import io, quarantine, reporting, scoring
 from src.intelligence.sensor_health.policy import SensorHealthPolicy, load_policy
@@ -97,14 +99,24 @@ def _build_manifest(
 ) -> dict[str, Any]:
     events = art["events"]
     event_counts = events["status"].value_counts().to_dict() if len(events) else {}
+    # ``labels`` is None when the caller relied on latest-run resolution (the
+    # --profile-labels default sentinel): recover the behaviour run directory
+    # and the concrete labels file so the manifest records real provenance
+    # instead of crashing on ``None.parent``.
+    labels_p = paths["labels"]
+    if labels_p is None:
+        behaviour_dir = resolve_behaviour_run()
+        labels_p = behaviour_dir / PROFILE_LABELS_FILE
+    else:
+        behaviour_dir = labels_p.parent.parent
     return {
         "component": "sensor_health",
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
         "master_dataset_path": str(paths["master"]),
         "master_dataset_sha256": file_sha256(paths["master"]),
-        "behaviour_artifact_path": str(paths["labels"].parent.parent),
-        "behaviour_fingerprint": dataset_fingerprint(labels_frame, paths["labels"]),
+        "behaviour_artifact_path": str(behaviour_dir),
+        "behaviour_fingerprint": dataset_fingerprint(labels_frame, labels_p),
         "behaviour_fit_timestamp": behaviour_manifest.get("fit_timestamp"),
         "sensor_scope": sensors,
         "train_window": behaviour_manifest.get("fit_window"),
