@@ -15,6 +15,7 @@ from src.intelligence.incidents import actions as actions_mod
 from src.intelligence.incidents import grouping, io, review_pack, run_incidents
 from src.intelligence.incidents import relationships as relationships_mod
 from src.intelligence.incidents.policy import IncidentsPolicy
+from src.intelligence.incidents.validation import IncidentsBlockerError
 
 CandidateFactory = Callable[..., pd.DataFrame]
 PolicyFactory = Callable[..., IncidentsPolicy]
@@ -240,3 +241,15 @@ def test_dispatcher_registration(incidents_world: dict[str, Any]) -> None:
         )
         == 0
     )
+
+
+def test_upstream_run_divergence_is_a_blocker(incidents_world: dict[str, Any]) -> None:
+    """DAT-01: a drift run pinning a different sensor-health run fails closed."""
+    dmanifest = (
+        incidents_world["tmp_path"] / "drift" / "runs" / "d1" / "drift_manifest.json"
+    )
+    payload = json.loads(dmanifest.read_text(encoding="utf-8"))
+    payload["upstream"]["sensor_health_run_id"] = "a-different-run"
+    dmanifest.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(IncidentsBlockerError, match="divergence"):
+        run_incidents.main([*incidents_world["args"], "--no-write"])

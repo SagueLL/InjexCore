@@ -14,7 +14,10 @@ upstream:
   incidents_run: latest
   drift_root: data/intelligence/drift
   drift_run: latest
-  behaviour_manifest: data/intelligence/behaviour/behaviour_fit_manifest.json
+  # Behaviour is run-versioned; reference_v1 is seeded from the latest
+  # completed behaviour run's self-reported provenance.
+  behaviour_root: data/intelligence/behaviour
+  behaviour_run: latest
   master_path: data/datasets/master/master_dataset.parquet
 
 # Sensors eligible for a quarantine *proposal*. A proposal is only created

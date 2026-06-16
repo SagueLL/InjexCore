@@ -173,6 +173,9 @@ def world(tmp_path: Path) -> dict:
     (anomaly_run / "anomaly_fit_manifest.json").write_text(
         json.dumps(
             {
+                "component": "anomaly",
+                "run_id": "chain",
+                "completion_status": "complete",
                 "fit_window": {"train_end": _TRAIN_END},
                 "dataset_fingerprint": {"sha256": "synthetic"},
             }
@@ -183,7 +186,16 @@ def world(tmp_path: Path) -> dict:
     forensic_root = tmp_path / "forensics"
     forensic_run = forensic_root / "runs" / "fr1"
     forensic_run.mkdir(parents=True)
-    (forensic_run / "forensic_manifest.json").write_text("{}", encoding="utf-8")
+    (forensic_run / "forensic_manifest.json").write_text(
+        json.dumps(
+            {
+                "component": "anomaly_forensic_addendum",
+                "run_id": "fr1",
+                "completion_status": "complete",
+            }
+        ),
+        encoding="utf-8",
+    )
 
     addenda_root = tmp_path / "bom_addenda"
     config = tmp_path / "bom.yaml"

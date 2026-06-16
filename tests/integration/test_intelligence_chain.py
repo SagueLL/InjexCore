@@ -18,6 +18,7 @@ import pytest
 from src.config import PROJECT_ROOT
 from src.intelligence.anomaly import io as anomaly_io
 from src.intelligence.anomaly import run_anomaly
+from src.intelligence.behaviour import io as behaviour_io
 from src.intelligence.behaviour import run_behaviour
 from src.intelligence.correlation import io as correlation_io
 from src.intelligence.correlation import run_correlation
@@ -71,10 +72,6 @@ def test_full_chain_consumes_persisted_artifacts(
     tmp_path: Path, master_path: Path
 ) -> None:
     behaviour_dir = tmp_path / "behaviour"
-    labels_path = behaviour_dir / "profile_labels.parquet"
-    baselines_path = behaviour_dir / "baselines.parquet"
-    behaviour_manifest = behaviour_dir / "behaviour_fit_manifest.json"
-
     behaviour_yaml = tmp_path / "behaviour.yaml"
     behaviour_yaml.write_text(_BEHAVIOUR_YAML, encoding="utf-8")
     downstream_yaml = tmp_path / "downstream.yaml"
@@ -82,7 +79,7 @@ def test_full_chain_consumes_persisted_artifacts(
     pca_anomaly_yaml = tmp_path / "pca_anomaly.yaml"
     pca_anomaly_yaml.write_text(_PCA_ANOMALY_YAML, encoding="utf-8")
 
-    # --- 1. behaviour: derives profiles + leakage-safe split ---------------
+    # --- 1. behaviour: derives profiles + leakage-safe split (run-versioned) -
     assert (
         run_behaviour.main(
             [
@@ -92,26 +89,18 @@ def test_full_chain_consumes_persisted_artifacts(
                 str(_CLASSIFICATION),
                 "--policy",
                 str(behaviour_yaml),
-                "--profile-labels",
-                str(labels_path),
-                "--baselines",
-                str(baselines_path),
-                "--fit-manifest",
-                str(behaviour_manifest),
-                "--distribution",
-                str(behaviour_dir / "distribution.parquet"),
-                "--durations",
-                str(behaviour_dir / "durations.parquet"),
-                "--transitions",
-                str(behaviour_dir / "transitions.parquet"),
-                "--out-json",
-                str(behaviour_dir / "report.json"),
-                "--out-md",
-                str(behaviour_dir / "report.md"),
+                "--output-root",
+                str(behaviour_dir),
+                "--run-id",
+                "chain",
             ]
         )
         == 0
     )
+    behaviour_run = behaviour_dir / "runs" / "chain"
+    labels_path = behaviour_run / behaviour_io.PROFILE_LABELS_FILE
+    baselines_path = behaviour_run / behaviour_io.BASELINES_FILE
+    behaviour_manifest = behaviour_run / behaviour_io.MANIFEST_NAME
     labels = pd.read_parquet(labels_path)
     n_train = int(labels["is_train"].sum())
     assert n_train == 168  # 70% of 240 — the leakage contract downstream reuses

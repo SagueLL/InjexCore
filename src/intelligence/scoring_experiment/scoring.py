@@ -6,6 +6,21 @@ rows whose anomaly evidence is dominated by a pending-quarantine sensor and
 down-ranks ONLY their review severity — original ``severity`` and
 ``combined_score`` are preserved verbatim; ``adjusted_review_score`` equals
 ``original_combined_score`` by construction because nothing is rescored.
+
+Two notions are kept strictly separate (LOG-01):
+
+* **incident-level explained-burst coverage** — a non-normal row lying inside
+  an anomaly-burst window already explained by a sensor fault
+  (``incident_explained_for_review``). This is a property of the window.
+* **row-level review suppression** — a row is only down-ranked when it carries
+  its *own* row-level evidence for the faulty sensor
+  (``row_suppressed_for_review`` + ``row_level_evidence_match``). An unrelated
+  process anomaly inside the same window is reported as incident-explained but
+  is **not** suppressed.
+
+The quarantine scenario id is derived from the pending proposal sensor(s), not
+hardcoded (GOV-02): one target -> ``quarantine_<sensor>_interpretive``, several
+-> ``quarantine_proposals_interpretive``, none -> no quarantine scenario.
 """
 
 from __future__ import annotations
@@ -18,7 +33,7 @@ import pandas as pd
 from src.intelligence.scoring_experiment.quarantine import QuarantineWindow
 
 BASELINE_SCENARIO = "baseline_v1"
-QUARANTINE_SCENARIO = "quarantine_inlet_hopper_points_interpretive"
+QUARANTINE_SCENARIO_MULTI = "quarantine_proposals_interpretive"
 
 SCENARIO_SCORE_COLUMNS = [
     "timestamp",
@@ -28,7 +43,10 @@ SCENARIO_SCORE_COLUMNS = [
     "adjusted_review_severity",
     "original_combined_score",
     "adjusted_review_score",
-    "suppressed_for_review",
+    "row_suppressed_for_review",
+    "incident_explained_for_review",
+    "incident_level_explanation_match",
+    "row_level_evidence_match",
     "suppression_reason",
     "dominant_faulty_sensor",
     "sensor_health_context",
@@ -48,6 +66,21 @@ _CONTEXT_COLUMNS = [
     "faulty_sensors",
     "quarantine_recommended_sensors",
 ]
+
+
+def sanitize_sensor(name: str) -> str:
+    """Deterministic identifier-safe form of a sensor name."""
+    return re.sub(r"[^0-9A-Za-z_]+", "_", str(name)).strip("_") or "sensor"
+
+
+def quarantine_scenario_id(sensors: list[str]) -> str:
+    """Scenario id for the pending quarantine target(s); ``""`` when none."""
+    uniq = list(dict.fromkeys(s for s in sensors if s))
+    if not uniq:
+        return ""
+    if len(uniq) == 1:
+        return f"quarantine_{sanitize_sensor(uniq[0])}_interpretive"
+    return QUARANTINE_SCENARIO_MULTI
 
 
 def build_base(anomaly: pd.DataFrame, op_timeline: pd.DataFrame) -> pd.DataFrame:
@@ -72,6 +105,18 @@ def _contains_token(series: pd.Series, token: str) -> pd.Series:
     return series.astype(str).str.contains(pattern, regex=True)
 
 
+def _row_evidence(base: pd.DataFrame, sensor: str) -> np.ndarray:
+    """Row-level evidence: the row's own anomaly attribution names the sensor.
+
+    Affected-variable dominance is the row-discriminating signal. The per-row
+    faulty/quarantine-recommended context is window-wide during a fault, so
+    using it alone would suppress every row in the window — exactly the
+    over-suppression LOG-01 forbids; it only *strengthens* an affected-variable
+    match here.
+    """
+    return _contains_token(base["affected_variables"], sensor).to_numpy()
+
+
 def apply_quarantine(
     base: pd.DataFrame,
     targets: list[QuarantineWindow],
@@ -81,32 +126,44 @@ def apply_quarantine(
     index = base.index
     nonnormal = base["original_severity"].to_numpy() != "normal"
     dominant = pd.Series("", index=index, dtype="object")
-    suppressed = pd.Series(False, index=index)
     reason = pd.Series("", index=index, dtype="object")
+    suppressed = pd.Series(False, index=index)
+    row_evidence = pd.Series(False, index=index)
+    incident_explained = pd.Series(False, index=index)
 
+    # Pending quarantine proposals: down-rank a row only when its own anomaly
+    # evidence is dominated by the proposed sensor AND the sensor is faulty then.
     for target in targets:
         in_window = (index >= target.start) & (index <= target.end)
-        in_evidence = _contains_token(base["affected_variables"], target.sensor)
-        faulty_now = _contains_token(
-            base["faulty_sensors"], target.sensor
-        ) | _contains_token(base["quarantine_recommended_sensors"], target.sensor)
-        hit = nonnormal & in_window & in_evidence.to_numpy() & faulty_now.to_numpy()
+        in_evidence = _row_evidence(base, target.sensor)
+        faulty_now = (
+            _contains_token(base["faulty_sensors"], target.sensor)
+            | _contains_token(base["quarantine_recommended_sensors"], target.sensor)
+        ).to_numpy()
+        hit = nonnormal & in_window & in_evidence & faulty_now
         _assign(
             dominant,
-            suppressed,
             reason,
+            suppressed,
+            row_evidence,
             hit,
             target.sensor,
             "evidence_dominated_by_quarantined_sensor",
         )
 
+    # Explained anomaly-burst windows: incident-level coverage is recorded for
+    # every non-normal row, but suppression STILL requires the row's own
+    # row-level evidence for the explaining sensor (LOG-01).
     for window in burst_windows:
         in_window = (index >= window.start) & (index <= window.end)
-        hit = nonnormal & in_window
+        covered = nonnormal & in_window
+        incident_explained.loc[covered] = True
+        hit = covered & _row_evidence(base, window.sensor)
         _assign(
             dominant,
-            suppressed,
             reason,
+            suppressed,
+            row_evidence,
             hit,
             window.sensor,
             "burst_explained_by_sensor_fault",
@@ -114,7 +171,10 @@ def apply_quarantine(
 
     out = base.copy()
     out["dominant_faulty_sensor"] = dominant
-    out["suppressed_for_review"] = suppressed
+    out["row_suppressed_for_review"] = suppressed
+    out["row_level_evidence_match"] = row_evidence
+    out["incident_explained_for_review"] = incident_explained
+    out["incident_level_explanation_match"] = incident_explained
     out["suppression_reason"] = reason
     out["adjusted_review_severity"] = base["original_severity"].where(
         ~suppressed, "normal"
@@ -126,8 +186,9 @@ def apply_quarantine(
 
 def _assign(
     dominant: pd.Series,
-    suppressed: pd.Series,
     reason: pd.Series,
+    suppressed: pd.Series,
+    row_evidence: pd.Series,
     hit: np.ndarray,
     sensor: str,
     why: str,
@@ -137,11 +198,13 @@ def _assign(
     dominant.loc[fresh] = sensor
     reason.loc[fresh] = why
     suppressed.loc[hit] = True
+    row_evidence.loc[hit] = True
 
 
-def _scenario_rows(base_oi: pd.DataFrame, scenario_id: str) -> pd.DataFrame:
+def _scenario_rows(
+    base_oi: pd.DataFrame, scenario_id: str, *, quarantine: bool
+) -> pd.DataFrame:
     """Project the review subset into the §11.1 scenario_scores schema."""
-    quarantine = scenario_id == QUARANTINE_SCENARIO
     frame = pd.DataFrame({"timestamp": base_oi.index})
     frame["profile"] = base_oi["profile"].to_numpy()
     frame["scenario_id"] = scenario_id
@@ -153,14 +216,27 @@ def _scenario_rows(base_oi: pd.DataFrame, scenario_id: str) -> pd.DataFrame:
     )
     frame["original_combined_score"] = base_oi["original_combined_score"].to_numpy()
     frame["adjusted_review_score"] = base_oi["original_combined_score"].to_numpy()
-    frame["suppressed_for_review"] = (
-        base_oi["suppressed_for_review"].to_numpy() if quarantine else False
+
+    n = len(base_oi)
+    falses = np.zeros(n, dtype=bool)
+    blanks = np.array([""] * n, dtype=object)
+    frame["row_suppressed_for_review"] = (
+        base_oi["row_suppressed_for_review"].to_numpy() if quarantine else falses
+    )
+    frame["incident_explained_for_review"] = (
+        base_oi["incident_explained_for_review"].to_numpy() if quarantine else falses
+    )
+    frame["incident_level_explanation_match"] = (
+        base_oi["incident_level_explanation_match"].to_numpy() if quarantine else falses
+    )
+    frame["row_level_evidence_match"] = (
+        base_oi["row_level_evidence_match"].to_numpy() if quarantine else falses
     )
     frame["suppression_reason"] = (
-        base_oi["suppression_reason"].to_numpy() if quarantine else ""
+        base_oi["suppression_reason"].to_numpy() if quarantine else blanks
     )
     frame["dominant_faulty_sensor"] = (
-        base_oi["dominant_faulty_sensor"].to_numpy() if quarantine else ""
+        base_oi["dominant_faulty_sensor"].to_numpy() if quarantine else blanks
     )
     for col in (
         "sensor_health_context",
@@ -174,16 +250,15 @@ def _scenario_rows(base_oi: pd.DataFrame, scenario_id: str) -> pd.DataFrame:
     return frame[SCENARIO_SCORE_COLUMNS]
 
 
-def scenario_scores(base: pd.DataFrame) -> pd.DataFrame:
-    """Long-format review table for both per-row scenarios.
+def scenario_scores(base: pd.DataFrame, quarantine_scenario: str) -> pd.DataFrame:
+    """Long-format review table for the baseline + quarantine scenarios.
 
     Restricted to rows that are non-normal in the baseline — the only rows
-    where a review adjustment is meaningful. Full-population counts live in
-    the comparison tables.
+    where a review adjustment is meaningful. The quarantine scenario is omitted
+    when there is no pending quarantine proposal (``quarantine_scenario == ""``).
     """
     base_oi = base[base["original_severity"] != "normal"]
-    frames = [
-        _scenario_rows(base_oi, BASELINE_SCENARIO),
-        _scenario_rows(base_oi, QUARANTINE_SCENARIO),
-    ]
+    frames = [_scenario_rows(base_oi, BASELINE_SCENARIO, quarantine=False)]
+    if quarantine_scenario:
+        frames.append(_scenario_rows(base_oi, quarantine_scenario, quarantine=True))
     return pd.concat(frames, ignore_index=True)

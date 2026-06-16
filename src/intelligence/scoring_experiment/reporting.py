@@ -21,10 +21,12 @@ RECOMMENDATION_COLUMNS = [
 ]
 
 
-def _quarantine_row(anomaly_rate: pd.DataFrame) -> dict[str, Any]:
-    row = anomaly_rate[
-        anomaly_rate["scenario_id"] == "quarantine_inlet_hopper_points_interpretive"
-    ]
+def _quarantine_row(
+    anomaly_rate: pd.DataFrame, quarantine_scenario: str
+) -> dict[str, Any]:
+    if not quarantine_scenario:
+        return {}
+    row = anomaly_rate[anomaly_rate["scenario_id"] == quarantine_scenario]
     return row.iloc[0].to_dict() if len(row) else {}
 
 
@@ -32,14 +34,17 @@ def build_recommendations(
     anomaly_rate: pd.DataFrame,
     drift_comparison: pd.DataFrame,
     residual: dict[str, Any],
+    quarantine_scenario: str,
+    quarantine_sensors: list[str],
 ) -> pd.DataFrame:
     """One recommendation row per scenario (decision-support, never an action)."""
-    q = _quarantine_row(anomaly_rate)
+    q = _quarantine_row(anomaly_rate, quarantine_scenario)
     suppressed = int(q.get("suppressed_count", 0))
     rate = float(q.get("suppression_rate", 0.0))
     proxy = drift_comparison[drift_comparison["scenario_id"] == "healthy_only_proxy"]
     reduction = float(proxy["reduction_pct"].iloc[0]) if len(proxy) else 0.0
     material = bool(residual.get("material", False))
+    sensors_text = ", ".join(quarantine_sensors) if quarantine_sensors else "n/a"
     rows = [
         {
             "scenario_id": "baseline_v1",
@@ -50,19 +55,25 @@ def build_recommendations(
             "requires_external_records": False,
             "evidence": "",
         },
-        {
-            "scenario_id": "quarantine_inlet_hopper_points_interpretive",
-            "recommendation": "route_quarantine_for_human_approval",
-            "rationale": (
-                f"{suppressed} non-normal rows ({rate * 100:.0f}%) are dominated "
-                "by the pending-quarantine sensor; approving the quarantine would "
-                "clear them from the review backlog. Interpretive only."
-            ),
-            "requires_human_approval": True,
-            "requires_model_refit": False,
-            "requires_external_records": False,
-            "evidence": f"suppressed={suppressed};suppression_rate={rate:.3f}",
-        },
+    ]
+    if quarantine_scenario:
+        rows.append(
+            {
+                "scenario_id": quarantine_scenario,
+                "recommendation": "route_quarantine_for_human_approval",
+                "rationale": (
+                    f"{suppressed} non-normal rows ({rate * 100:.0f}%) are "
+                    f"dominated by the pending-quarantine sensor(s) "
+                    f"({sensors_text}); approving the quarantine would clear them "
+                    "from the review backlog. Interpretive only."
+                ),
+                "requires_human_approval": True,
+                "requires_model_refit": False,
+                "requires_external_records": False,
+                "evidence": f"suppressed={suppressed};suppression_rate={rate:.3f}",
+            }
+        )
+    rows += [
         {
             "scenario_id": "healthy_only_proxy",
             "recommendation": "treat_residual_as_candidate_finding",
@@ -104,10 +115,10 @@ def build_recommendations(
 
 
 def build_findings(
-    anomaly_rate: pd.DataFrame, residual: dict[str, Any]
+    anomaly_rate: pd.DataFrame, residual: dict[str, Any], quarantine_scenario: str
 ) -> list[Finding]:
     """Structured findings — interpretive views, original scores immutable."""
-    q = _quarantine_row(anomaly_rate)
+    q = _quarantine_row(anomaly_rate, quarantine_scenario)
     findings = [
         Finding(
             check=CHECK,
@@ -120,28 +131,33 @@ def build_findings(
                 "original_warning_count": int(q.get("original_warning_count", 0)),
             },
         ),
-        Finding(
-            check=CHECK,
-            severity=Severity.IMPORTANT,
-            finding_type="quarantine_aware_review",
-            column="quarantine_inlet_hopper_points_interpretive",
-            count=int(q.get("suppressed_count", 0)),
-            action_taken="suppressed_for_review_only",
-            evidence={
-                "suppressed_count": int(q.get("suppressed_count", 0)),
-                "suppression_rate": float(q.get("suppression_rate", 0.0)),
-                "remaining_anomaly_count": int(q.get("remaining_anomaly_count", 0)),
-                "original_scores_mutated": False,
-            },
-        ),
+    ]
+    if quarantine_scenario:
+        findings.append(
+            Finding(
+                check=CHECK,
+                severity=Severity.IMPORTANT,
+                finding_type="quarantine_aware_review",
+                column=quarantine_scenario,
+                count=int(q.get("suppressed_count", 0)),
+                action_taken="row_suppressed_for_review_only",
+                evidence={
+                    "suppressed_count": int(q.get("suppressed_count", 0)),
+                    "suppression_rate": float(q.get("suppression_rate", 0.0)),
+                    "remaining_anomaly_count": int(q.get("remaining_anomaly_count", 0)),
+                    "original_scores_mutated": False,
+                },
+            )
+        )
+    findings.append(
         Finding(
             check=CHECK,
             severity=Severity.AWARE,
             finding_type="healthy_only_residual",
             action_taken="assessed",
             evidence=dict(residual),
-        ),
-    ]
+        )
+    )
     return findings
 
 
@@ -153,9 +169,10 @@ def render_report(
     recommendations: pd.DataFrame,
     residual: dict[str, Any],
     manifest: dict[str, Any],
+    quarantine_scenario: str,
 ) -> str:
     """Human-readable controlled-scoring report."""
-    q = _quarantine_row(anomaly_rate)
+    q = _quarantine_row(anomaly_rate, quarantine_scenario)
     lines = [
         "# Controlled Scoring Experiment report",
         "",

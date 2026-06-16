@@ -20,7 +20,7 @@ from tests.unit.intelligence import c3_world
 @pytest.fixture
 def reference_world(tmp_path: Path) -> dict[str, Any]:
     master_path, sha = c3_world.write_master(tmp_path)
-    behaviour_manifest = c3_world.write_behaviour(tmp_path)
+    behaviour_root = c3_world.write_behaviour(tmp_path, sha)
     c3_world.write_sensor_health(tmp_path, sha)
     c3_world.write_incidents(tmp_path)
     c3_world.write_drift(tmp_path, sha)
@@ -36,7 +36,8 @@ def reference_world(tmp_path: Path) -> dict[str, Any]:
                     "incidents_run": "latest",
                     "drift_root": (tmp_path / "drift").as_posix(),
                     "drift_run": "latest",
-                    "behaviour_manifest": behaviour_manifest.as_posix(),
+                    "behaviour_root": behaviour_root.as_posix(),
+                    "behaviour_run": "latest",
                     "master_path": master_path.as_posix(),
                 },
             }

@@ -88,13 +88,11 @@ def test_full_run_produces_all_artifacts_and_ground_truth(
         comparison.columns
     )
 
-    # Upstream fingerprint mismatch (synthetic shas) is a warn finding, not a
-    # blocker — recorded in compat_checks and the findings JSON.
-    assert manifest["compat_checks"]["anomaly_fingerprint_matches"] is False
-    findings = json.loads((out / io.FINDINGS_JSON).read_text(encoding="utf-8"))
-    assert "drift" in findings["findings_by_check"]
-    types = {f["finding_type"] for f in findings["findings_by_check"]["drift"]}
-    assert "upstream_dataset_mismatch" in types
+    # DAT-01: a coherent upstream chain passes lineage (fingerprint + sha +
+    # timeline all match); nothing proceeds over a mismatch.
+    assert manifest["compat_checks"]["anomaly_fingerprint_matches"] is True
+    assert manifest["compat_checks"]["sensor_health_master_sha_matches"] is True
+    assert manifest["compat_checks"]["operational_timeline_aligned"] is True
 
 
 def test_manifest_written_last_failed_run_not_resolvable(
@@ -128,6 +126,45 @@ def test_label_misalignment_is_a_blocker(drift_world: dict[str, Any]) -> None:
     labels = pd.read_parquet(drift_world["labels_path"]).iloc[:-5]
     labels.to_parquet(drift_world["labels_path"], index=False)
     with pytest.raises(run_drift.DriftBlockerError, match="does not match"):
+        run_drift.main([*drift_world["args"], "--no-write"])
+
+
+def _rewrite_manifest(path: Path, **changes: Any) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.update(changes)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_upstream_fingerprint_mismatch_is_a_blocker(
+    drift_world: dict[str, Any],
+) -> None:
+    """DAT-01: an anomaly run on a different-shaped master fails closed."""
+    amanifest = (
+        drift_world["tmp_path"]
+        / "anomaly"
+        / "runs"
+        / "a1"
+        / "anomaly_fit_manifest.json"
+    )
+    _rewrite_manifest(
+        amanifest,
+        dataset_fingerprint={"sha256": "x", "n_rows": 999999, "index_start": "z"},
+    )
+    with pytest.raises(run_drift.DriftBlockerError, match="does not match"):
+        run_drift.main([*drift_world["args"], "--no-write"])
+
+
+def test_upstream_master_sha_mismatch_is_a_blocker(drift_world: dict[str, Any]) -> None:
+    """DAT-01: a sensor-health run on a different master fails closed."""
+    shmanifest = (
+        drift_world["tmp_path"]
+        / "sensor_health"
+        / "runs"
+        / "s1"
+        / "sensor_health_manifest.json"
+    )
+    _rewrite_manifest(shmanifest, master_dataset_sha256="a-different-sha")
+    with pytest.raises(run_drift.DriftBlockerError, match="different master"):
         run_drift.main([*drift_world["args"], "--no-write"])
 
 

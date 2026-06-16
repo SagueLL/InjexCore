@@ -58,7 +58,12 @@ from src.intelligence._common.reporting import (
     write_json,
     write_markdown,
 )
-from src.intelligence._common.runs import LATEST, new_run_id, resolve_run, run_dir
+from src.intelligence._common.runs import (
+    LATEST,
+    create_run_dir,
+    new_run_id,
+    resolve_run,
+)
 from src.intelligence._common.upstream import (
     DEFAULT_BASELINES,
     DEFAULT_BEHAVIOUR_MANIFEST,
@@ -544,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = run_dir(args.output_root, run_id)
+    out = create_run_dir(args.output_root, run_id)
     write_table(art.scored, out / io.SCORES_FILE)
     write_table(art.calibration, out / io.CALIBRATION_FILE)
     write_table(art.unsupported, out / io.UNSUPPORTED_FILE)

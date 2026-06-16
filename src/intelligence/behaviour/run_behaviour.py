@@ -31,27 +31,21 @@ import logging
 import sys
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from src.config import CONFIGS_DIR
-from src.intelligence.behaviour import baselines, profiles, validation
+from src.intelligence.behaviour import baselines, io, profiles, validation
 from src.intelligence.behaviour.baselines import BaselineArtifact
 from src.intelligence.behaviour.column_groups import (
     DEFAULT_CLASSIFICATION,
     load_groups,
 )
 from src.intelligence.behaviour.io import (
-    DEFAULT_BASELINES_OUT,
-    DEFAULT_DISTRIBUTION_OUT,
-    DEFAULT_DURATIONS_OUT,
-    DEFAULT_FIT_MANIFEST_OUT,
     DEFAULT_MASTER_IN,
-    DEFAULT_PROFILE_LABELS_OUT,
-    DEFAULT_REPORT_JSON,
-    DEFAULT_REPORT_MD,
-    DEFAULT_TRANSITIONS_OUT,
     load_master,
     write_manifest,
     write_table,
@@ -106,10 +100,40 @@ def compute_train_mask(df: pd.DataFrame, policy: BehaviourPolicy) -> pd.Series:
     return mask
 
 
+def _windows(
+    df: pd.DataFrame, train_mask: pd.Series
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Train / validation window bounds for the fit manifest."""
+    n_total = int(len(df))
+    n_train = int(train_mask.sum())
+    train_start = train_end = val_start = val_end = None
+    if isinstance(df.index, pd.DatetimeIndex) and n_total:
+        tmask = train_mask.to_numpy()
+        if n_train:
+            tidx = df.index[tmask]
+            train_start, train_end = str(tidx.min()), str(tidx.max())
+        if n_train < n_total:
+            vidx = df.index[~tmask]
+            val_start, val_end = str(vidx.min()), str(vidx.max())
+    train_window = {
+        "n_train": n_train,
+        "n_total": n_total,
+        "train_start": train_start,
+        "train_end": train_end,
+    }
+    validation_window = {
+        "n_val": n_total - n_train,
+        "val_start": val_start,
+        "val_end": val_end,
+    }
+    return train_window, validation_window
+
+
 def run(
     master_path: Path,
     classification: Path,
     policy_path: Path,
+    run_id: str,
 ) -> BehaviourArtifacts:
     """Execute the full Behaviour Intelligence pipeline (pure; no file writes)."""
     log.info("Loading policy from %s", policy_path)
@@ -171,12 +195,26 @@ def run(
         100.0 * val.coverage["labeled_pct"],
     )
 
+    train_window, validation_window = _windows(df, train_mask)
     manifest = {
+        "component": io.COMPONENT,
+        "run_id": run_id,
+        # Flipped to "complete" at write time (manifest-last contract): a
+        # crashed run never leaves a resolvable manifest behind.
+        "completion_status": "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+        "master_dataset_path": str(master_path),
+        "master_dataset_sha256": io.file_sha256(master_path),
         **base.fit_manifest,
+        "train_window": train_window,
+        "validation_window": validation_window,
+        "row_count": int(len(df)),
+        "profile_count": int(val.coverage["n_profiles"]),
         "machine_on_source": prof.machine_on_source,
         "production_edges": prof.production_edges,
         "production_quantiles": policy.profiles.production_quantiles,
         "material_change_enabled": prof.material_change is not None,
+        "generated_files": [],  # filled by main() at write time
     }
 
     return BehaviourArtifacts(
@@ -194,18 +232,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--master", type=Path, default=DEFAULT_MASTER_IN)
     p.add_argument("--classification", type=Path, default=DEFAULT_CLASSIFICATION)
     p.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
-    p.add_argument("--profile-labels", type=Path, default=DEFAULT_PROFILE_LABELS_OUT)
-    p.add_argument("--baselines", type=Path, default=DEFAULT_BASELINES_OUT)
-    p.add_argument("--fit-manifest", type=Path, default=DEFAULT_FIT_MANIFEST_OUT)
-    p.add_argument("--distribution", type=Path, default=DEFAULT_DISTRIBUTION_OUT)
-    p.add_argument("--durations", type=Path, default=DEFAULT_DURATIONS_OUT)
-    p.add_argument("--transitions", type=Path, default=DEFAULT_TRANSITIONS_OUT)
-    p.add_argument("--out-json", type=Path, default=DEFAULT_REPORT_JSON)
-    p.add_argument("--out-md", type=Path, default=DEFAULT_REPORT_MD)
+    p.add_argument(
+        "--output-root",
+        type=Path,
+        default=io.BEHAVIOUR_DIR,
+        help="Component root; artifacts land under <root>/runs/<run_id>/.",
+    )
+    p.add_argument(
+        "--run-id",
+        default=None,
+        help="Run identifier (default: fresh UTC timestamp; never overwrites).",
+    )
     p.add_argument(
         "--no-write",
         action="store_true",
-        help="Skip writing artifacts; still emit the JSON/MD report.",
+        help="Diagnostic only: run the full pipeline, write nothing.",
     )
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
@@ -229,34 +270,47 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
 
-    art = run(args.master, args.classification, args.policy)
-
-    log.info("Writing report → %s", args.out_json)
-    write_json(art.findings, args.out_json)
-    write_markdown(art.findings, args.out_md, title="Behaviour Intelligence Report")
+    run_id = args.run_id or io.new_run_id(args.output_root)
+    art = run(args.master, args.classification, args.policy, run_id)
 
     if args.no_write:
         log.info(
-            "--no-write: skipping artifacts (%d findings reported)", len(art.findings)
+            "--no-write: skipping all artifacts (%d findings; run id %s unused)",
+            len(art.findings),
+            run_id,
         )
         return 0
 
-    write_table(_profile_labels_frame(art, art.train_mask), args.profile_labels)
-    log.info("Wrote profile labels → %s", args.profile_labels)
-
+    out = io.create_run_dir(args.output_root, run_id)
+    write_table(
+        _profile_labels_frame(art, art.train_mask), out / io.PROFILE_LABELS_FILE
+    )
     if not art.baseline.table.empty:
-        write_table(art.baseline.table, args.baselines)
-        log.info(
-            "Wrote baselines (%d rows) → %s", len(art.baseline.table), args.baselines
-        )
+        write_table(art.baseline.table, out / io.BASELINES_FILE)
     else:
-        log.warning("Baseline table empty — nothing written to %s", args.baselines)
+        log.warning("Baseline table empty — no baselines written")
+    write_table(art.validation.distribution, out / io.DISTRIBUTION_FILE)
+    write_table(art.validation.durations, out / io.DURATIONS_FILE)
+    write_table(art.validation.transitions, out / io.TRANSITIONS_FILE)
+    write_json(art.findings, out / io.REPORT_JSON)
+    write_markdown(
+        art.findings, out / io.REPORT_MD, title="Behaviour Intelligence Report"
+    )
 
-    write_manifest(art.manifest, args.fit_manifest)
-    write_table(art.validation.distribution, args.distribution)
-    write_table(art.validation.durations, args.durations)
-    write_table(art.validation.transitions, args.transitions)
-    log.info("Wrote fit manifest + validation artifacts → %s", args.fit_manifest.parent)
+    manifest = dict(art.manifest)
+    manifest["generated_files"] = [
+        str(io.PROFILE_LABELS_FILE),
+        str(io.BASELINES_FILE),
+        str(io.DISTRIBUTION_FILE),
+        str(io.DURATIONS_FILE),
+        str(io.TRANSITIONS_FILE),
+        io.REPORT_JSON,
+        io.REPORT_MD,
+    ]
+    manifest["completion_status"] = "complete"
+    # Manifest last: its presence marks the run as complete (resolvable).
+    write_manifest(manifest, out / io.MANIFEST_NAME)
+    log.info("Wrote behaviour run → %s", out)
 
     return 0
 

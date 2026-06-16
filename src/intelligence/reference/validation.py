@@ -26,17 +26,32 @@ def validate_upstream(
     upstream_manifests: dict[str, dict[str, Any]],
     run_ids: dict[str, str],
 ) -> tuple[dict[str, Any], list[Finding]]:
-    """Block on a missing train window or a stale upstream master."""
+    """Block on missing/incompatible behaviour provenance or a stale upstream master."""
     fit_window = behaviour_manifest.get("fit_window") or {}
     if not fit_window.get("train_start") or not fit_window.get("train_end"):
         raise ReferenceBlockerError(
             "Behaviour fit manifest has no train window — cannot seed "
             "reference_v1. Re-run the behaviour component first."
         )
+    # GOV-01: reference_v1 is seeded from behaviour's recorded master sha; it
+    # must exist and match the current master, or provenance is unverifiable.
+    behaviour_sha = behaviour_manifest.get("master_dataset_sha256")
+    if not behaviour_sha:
+        raise ReferenceBlockerError(
+            "Behaviour fit manifest has no master_dataset_sha256 — cannot "
+            "establish reference_v1 provenance. Re-run the behaviour component."
+        )
+    if behaviour_sha != master_sha256:
+        raise ReferenceBlockerError(
+            "Behaviour baseline was fitted on a different master "
+            f"(sha {behaviour_sha} != current {master_sha256}); reference_v1 "
+            "provenance is incompatible. Re-run behaviour on the current master."
+        )
     findings: list[Finding] = []
     compat: dict[str, Any] = {
         "run_ids": dict(run_ids),
         "master_sha256": master_sha256,
+        "behaviour_master_sha_matches": True,
     }
     for name, manifest in upstream_manifests.items():
         recorded = manifest.get("master_dataset_sha256")

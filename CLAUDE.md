@@ -56,15 +56,19 @@ python -m src.preprocessing --stage datasets # specialized datasets only
 python -m src.preprocessing --stage all      # cleaning → ts → fe → datasets
 
 # Intelligence Layer — Behaviour Intelligence (consumes master_dataset.parquet)
-#   → data/intelligence/behaviour/profiles/profile_labels.parquet
-#   → data/intelligence/behaviour/baselines/baselines.parquet
-#   → data/intelligence/behaviour/validation/{distribution,durations,transitions}.parquet
-#   → data/intelligence/behaviour/behaviour_fit_manifest.json (+ behaviour_intelligence_report.{json,md})
+# Run-versioned + manifest-last, like every other component (ARC-01):
+#   → data/intelligence/behaviour/runs/<run_id>/profiles/profile_labels.parquet
+#   → data/intelligence/behaviour/runs/<run_id>/baselines/baselines.parquet
+#   → data/intelligence/behaviour/runs/<run_id>/validation/{distribution,durations,transitions}.parquet
+#   → data/intelligence/behaviour/runs/<run_id>/behaviour_intelligence_report.{json,md}
+#   → data/intelligence/behaviour/runs/<run_id>/behaviour_fit_manifest.json  (written LAST; records
+#     component/run_id/completion_status + master_dataset_sha256 + train/validation_window)
+# Downstream resolves the LATEST COMPLETED behaviour run (clean cutover from the old fixed paths).
 # Standalone (NOT part of the --stage shim): fits descriptive artifacts past the preprocessing chain.
 python -m src.intelligence                                    # layer dispatcher → default component (behaviour)
-python -m src.intelligence --component behaviour --no-write   # via dispatcher, diagnostic only
-python -m src.intelligence.behaviour.run_behaviour            # component directly: full run
-python -m src.intelligence.behaviour.run_behaviour --no-write # component directly: reports, no artifacts
+python -m src.intelligence --component behaviour --no-write   # diagnostic only: writes NOTHING (side-effect-free)
+python -m src.intelligence.behaviour.run_behaviour            # component directly: full run (--output-root/--run-id)
+python -m src.intelligence.behaviour.run_behaviour --no-write # component directly: writes nothing at all
 
 # Intelligence Layer — Iteration B components (need sklearn: pip install -e ".[models,dev]").
 # All consume behaviour's persisted labels/manifest (run behaviour first) and write
@@ -148,9 +152,9 @@ mypy src
 pytest
 ```
 
-Quality tooling is wired up: `ruff` (lint + format), `mypy src` (lenient baseline — pandas treated as untyped for now; the pydantic mypy plugin is enabled so `Field(...)` constraints and `default_factory=Model` type-check), and `pytest`, gated locally by `.pre-commit-config.yaml` and in CI by `.github/workflows/ci.yml`. All tool config lives in `pyproject.toml`. Unit tests live under `tests/unit/preprocessing/{cleaning,time_series,feature_engineering,datasets}/`, `tests/unit/intelligence/{_common,behaviour,correlation,pca,anomaly,sensor_health,drift,incidents,reference,scoring_experiment}/` and `tests/unit/context/{bom,operational}/`, plus the chain contract tests in `tests/integration/`, and run with `pytest` (517 tests, ~55 s).
+Quality tooling is wired up: `ruff` (lint + format), `mypy src` (lenient baseline — pandas treated as untyped for now; the pydantic mypy plugin is enabled so `Field(...)` constraints and `default_factory=Model` type-check), and `pytest`, gated locally by `.pre-commit-config.yaml` and in CI by `.github/workflows/ci.yml`. All tool config lives in `pyproject.toml`. Unit tests live under `tests/unit/preprocessing/{cleaning,time_series,feature_engineering,datasets}/`, `tests/unit/intelligence/{_common,behaviour,correlation,pca,anomaly,sensor_health,drift,incidents,reference,scoring_experiment}/` and `tests/unit/context/{bom,operational}/`, plus the chain contract tests in `tests/integration/`, and run with `pytest` (551 tests, ~55 s).
 
-Reference docs for each preprocessing stage: [docs/pipeline/data_cleaning.md](docs/pipeline/data_cleaning.md), [docs/pipeline/time_series_engineering.md](docs/pipeline/time_series_engineering.md), [docs/pipeline/feature_engineering.md](docs/pipeline/feature_engineering.md), [docs/pipeline/specialized_datasets.md](docs/pipeline/specialized_datasets.md). Intelligence Layer: [docs/intelligence/behaviour_intelligence.md](docs/intelligence/behaviour_intelligence.md), [docs/intelligence/correlation_intelligence.md](docs/intelligence/correlation_intelligence.md), [docs/intelligence/pca_intelligence.md](docs/intelligence/pca_intelligence.md), [docs/intelligence/anomaly_intelligence.md](docs/intelligence/anomaly_intelligence.md), [docs/intelligence/sensor_health_intelligence.md](docs/intelligence/sensor_health_intelligence.md), [docs/intelligence/drift_intelligence.md](docs/intelligence/drift_intelligence.md), [docs/intelligence/incident_aggregation.md](docs/intelligence/incident_aggregation.md), [docs/intelligence/reference_governance.md](docs/intelligence/reference_governance.md), [docs/intelligence/controlled_scoring_experiment.md](docs/intelligence/controlled_scoring_experiment.md). External Context Layer: [docs/context/bom_context.md](docs/context/bom_context.md), [docs/context/operational_context.md](docs/context/operational_context.md). See [docs/README.md](docs/README.md) for the full documentation map.
+Reference docs for each preprocessing stage: [docs/pipeline/data_cleaning.md](docs/pipeline/data_cleaning.md), [docs/pipeline/time_series_engineering.md](docs/pipeline/time_series_engineering.md), [docs/pipeline/feature_engineering.md](docs/pipeline/feature_engineering.md), [docs/pipeline/specialized_datasets.md](docs/pipeline/specialized_datasets.md). Intelligence Layer: [docs/intelligence/behaviour_intelligence.md](docs/intelligence/behaviour_intelligence.md), [docs/intelligence/correlation_intelligence.md](docs/intelligence/correlation_intelligence.md), [docs/intelligence/pca_intelligence.md](docs/intelligence/pca_intelligence.md), [docs/intelligence/anomaly_intelligence.md](docs/intelligence/anomaly_intelligence.md), [docs/intelligence/sensor_health_intelligence.md](docs/intelligence/sensor_health_intelligence.md), [docs/intelligence/drift_intelligence.md](docs/intelligence/drift_intelligence.md), [docs/intelligence/incident_aggregation.md](docs/intelligence/incident_aggregation.md), [docs/intelligence/reference_governance.md](docs/intelligence/reference_governance.md), [docs/intelligence/controlled_scoring_experiment.md](docs/intelligence/controlled_scoring_experiment.md). External Context Layer: [docs/context/bom_context.md](docs/context/bom_context.md), [docs/context/operational_context.md](docs/context/operational_context.md). End-to-end dataflow + contracts (run-versioning, manifest-last, lineage, original-vs-interpretive scores): [docs/architecture/intelligence_dataflow.md](docs/architecture/intelligence_dataflow.md). See [docs/README.md](docs/README.md) for the full documentation map.
 
 ---
 

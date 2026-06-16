@@ -22,7 +22,7 @@ from src.intelligence.scoring_experiment import run_scoring_experiment
 from tests.unit.intelligence import c3_world
 
 
-def _reference_config(tmp: Path, master_path: Path, behaviour: Path) -> Path:
+def _reference_config(tmp: Path, master_path: Path, behaviour_root: Path) -> Path:
     path = tmp / "reference_governance.yaml"
     path.write_text(
         yaml.safe_dump(
@@ -31,7 +31,8 @@ def _reference_config(tmp: Path, master_path: Path, behaviour: Path) -> Path:
                     "sensor_health_root": (tmp / "sensor_health").as_posix(),
                     "incidents_root": (tmp / "incidents").as_posix(),
                     "drift_root": (tmp / "drift").as_posix(),
-                    "behaviour_manifest": behaviour.as_posix(),
+                    "behaviour_root": behaviour_root.as_posix(),
+                    "behaviour_run": "latest",
                     "master_path": master_path.as_posix(),
                 }
             }
@@ -64,7 +65,7 @@ def _scoring_config(tmp: Path, master_path: Path, reference_root: Path) -> Path:
 
 def test_governance_to_scoring_to_decision(tmp_path: Path) -> None:
     master_path, sha = c3_world.write_master(tmp_path)
-    behaviour = c3_world.write_behaviour(tmp_path)
+    behaviour_root = c3_world.write_behaviour(tmp_path, sha)
     c3_world.write_sensor_health(tmp_path, sha)
     c3_world.write_incidents(tmp_path)
     c3_world.write_drift(tmp_path, sha)
@@ -73,7 +74,7 @@ def test_governance_to_scoring_to_decision(tmp_path: Path) -> None:
 
     # --- 1. Reference Governance produces a real reference run.
     reference_root = tmp_path / "reference_out"
-    ref_config = _reference_config(tmp_path, master_path, behaviour)
+    ref_config = _reference_config(tmp_path, master_path, behaviour_root)
     assert (
         run_reference.main(
             [
@@ -116,8 +117,8 @@ def test_governance_to_scoring_to_decision(tmp_path: Path) -> None:
     # --- 3. Scenario scores: original immutable, quarantine rows suppressed.
     ss = pd.read_parquet(scoring_root / "runs" / "sc" / sc_io.SCENARIO_SCORES_FILE)
     quar = ss[ss["scenario_id"] == "quarantine_inlet_hopper_points_interpretive"]
-    assert quar["suppressed_for_review"].any()
-    assert set(quar[quar["suppressed_for_review"]]["dominant_faulty_sensor"]) == {
+    assert quar["row_suppressed_for_review"].any()
+    assert set(quar[quar["row_suppressed_for_review"]]["dominant_faulty_sensor"]) == {
         "inlet_hopper_points"
     }
 

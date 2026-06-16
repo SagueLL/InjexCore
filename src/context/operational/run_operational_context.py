@@ -24,7 +24,6 @@ thresholds. Run standalone::
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 import time
@@ -52,7 +51,14 @@ from src.context.operational.forensic_addendum import (
     write_addendum,
 )
 from src.context.operational.policy import OperationalContextPolicy, load_policy
-from src.intelligence._common.upstream import align_labels, load_profile_labels
+from src.intelligence._common.upstream import (
+    BEHAVIOUR_MANIFEST_NAME,
+    PROFILE_LABELS_FILE,
+    align_labels,
+    load_behaviour_manifest,
+    load_profile_labels,
+    resolve_behaviour_run,
+)
 from src.preprocessing._common.reporting import Finding, write_json
 
 DEFAULT_CONFIG = CONFIGS_DIR / "operational_context.yaml"
@@ -133,13 +139,26 @@ def run(
     steam_cols = [policy.steam.pressure_sensor, policy.steam.temp_sensor]
     steam_cols += list(policy.steam.auxiliary_sensors)
     df = io.load_master_columns(master_path, steam_cols)
-    labels_path = io.resolve_project_path(policy.upstream.profile_labels_path)
-    labels_frame = load_profile_labels(labels_path)
-    behaviour_manifest = json.loads(
-        io.resolve_project_path(policy.upstream.behaviour_manifest_path).read_text(
-            encoding="utf-8"
+    labels_cfg = policy.upstream.profile_labels_path
+    manifest_cfg = policy.upstream.behaviour_manifest_path
+    # Empty config paths -> resolve the latest completed behaviour run.
+    if labels_cfg and manifest_cfg:
+        labels_path = io.resolve_project_path(labels_cfg)
+        manifest_path = io.resolve_project_path(manifest_cfg)
+    else:
+        behaviour_run = resolve_behaviour_run()
+        labels_path = (
+            io.resolve_project_path(labels_cfg)
+            if labels_cfg
+            else behaviour_run / PROFILE_LABELS_FILE
         )
-    )
+        manifest_path = (
+            io.resolve_project_path(manifest_cfg)
+            if manifest_cfg
+            else behaviour_run / BEHAVIOUR_MANIFEST_NAME
+        )
+    labels_frame = load_profile_labels(labels_path)
+    behaviour_manifest = load_behaviour_manifest(manifest_path)
     try:
         profile, train_mask = align_labels(df, labels_frame)
     except ValueError as exc:
@@ -366,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     table_map = {
         io.TIMELINE_FILE: art.timeline,
         io.TRANSITIONS_FILE: art.transitions,

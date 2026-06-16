@@ -69,6 +69,9 @@ def _test_policy_dict() -> dict[str, Any]:
 
 def _write_manifest_last(run_dir: Path, name: str, manifest: dict[str, Any]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
+    # Synthetic runs are *completed* runs (ARC-02): run_id matches the dir,
+    # completion_status == "complete".
+    manifest = {"run_id": run_dir.name, "completion_status": "complete", **manifest}
     (run_dir / name).write_text(
         json.dumps(manifest, indent=2, default=str), encoding="utf-8"
     )
@@ -162,7 +165,12 @@ def build_world(tmp_path: Path) -> dict[str, Any]:
         {
             "component": "anomaly",
             "run_id": "a1",
-            "dataset_fingerprint": {"sha256": "not-the-real-fingerprint"},
+            "dataset_fingerprint": {
+                "sha256": "synthetic",
+                "n_rows": N_ROWS,
+                "index_start": str(ts[0]),
+                "index_end": str(ts[-1]),
+            },
         },
     )
 
@@ -196,7 +204,12 @@ def build_world(tmp_path: Path) -> dict[str, Any]:
         {
             "component": "pca",
             "run_id": "p1",
-            "dataset_fingerprint": {"sha256": "not-the-real-fingerprint"},
+            "dataset_fingerprint": {
+                "sha256": "synthetic",
+                "n_rows": N_ROWS,
+                "index_start": str(ts[0]),
+                "index_end": str(ts[-1]),
+            },
         },
     )
 
@@ -251,7 +264,12 @@ def build_world(tmp_path: Path) -> dict[str, Any]:
         {
             "component": "correlation",
             "run_id": "c1",
-            "dataset_fingerprint": {"sha256": "not-the-real-fingerprint"},
+            "dataset_fingerprint": {
+                "sha256": "synthetic",
+                "n_rows": N_ROWS,
+                "index_start": str(ts[0]),
+                "index_end": str(ts[-1]),
+            },
         },
     )
 

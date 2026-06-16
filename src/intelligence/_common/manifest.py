@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 
 from src.intelligence._common.fingerprint import dataset_fingerprint
+from src.intelligence._common.runs import COMPLETE
 from src.preprocessing._common.models import StrictModel
 
 
@@ -53,4 +54,8 @@ def base_manifest(
         "features": features,
         "config_snapshot": policy.model_dump(),
         "upstream": upstream,
+        # The manifest is only ever written last, by which point the run is
+        # on disk and complete; the explicit marker lets resolution reject a
+        # half-written or pending manifest instead of trusting mere presence.
+        "completion_status": COMPLETE,
     }

@@ -176,7 +176,14 @@ def _write_bom_run(root: Path, ts: pd.Series) -> None:
     frame.loc[2300:2599, "order_ids"] = "100|101"
     frame.to_parquet(run / "timeline" / "bom_context_timeline.parquet", index=False)
     (run / "bom_context_manifest.json").write_text(
-        json.dumps({"completion_status": "complete"}), encoding="utf-8"
+        json.dumps(
+            {
+                "component": "bom_context",
+                "run_id": "chain",
+                "completion_status": "complete",
+            }
+        ),
+        encoding="utf-8",
     )
 
 
@@ -203,6 +210,9 @@ def _write_anomaly_run(root: Path, ts: pd.Series, train_end: str) -> None:
     (run / "anomaly_fit_manifest.json").write_text(
         json.dumps(
             {
+                "component": "anomaly",
+                "run_id": "chain",
+                "completion_status": "complete",
                 "fit_window": {"train_end": train_end},
                 "dataset_fingerprint": {"sha256": "synthetic"},
             }
@@ -227,7 +237,14 @@ def world(tmp_path: Path) -> dict:
     forensic_root = tmp_path / "forensics"
     (forensic_root / "runs" / "fr1").mkdir(parents=True)
     (forensic_root / "runs" / "fr1" / "forensic_manifest.json").write_text(
-        "{}", encoding="utf-8"
+        json.dumps(
+            {
+                "component": "anomaly_forensic_addendum",
+                "run_id": "fr1",
+                "completion_status": "complete",
+            }
+        ),
+        encoding="utf-8",
     )
 
     op_config = tmp_path / "operational.yaml"

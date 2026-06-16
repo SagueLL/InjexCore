@@ -30,28 +30,41 @@ early from sensor/telemetry data.
 
 ## Architecture
 
-A linear, modular data layer — one package per preprocessing stage — feeds the
-(planned) modeling and serving layers:
+A linear, modular **Data Foundation** feeds an **Intelligence Layer** that
+characterises normal behaviour and surfaces deviations, plus a read-only
+**External Context Layer**. Predictive models and a serving API are planned:
 
 ```
-data_generation → cleaning → time_series → feature_engineering → datasets → [models] → [api]
+data_generation → cleaning → time_series → feature_engineering → datasets   (Data Foundation)
+        → behaviour → correlation·pca → anomaly → sensor_health → drift      (Intelligence Layer)
+        → incidents → reference governance → controlled scoring → decision   (review + governance)
+        context/{bom, operational} ── read-only joins against the master + scores (interpretation only)
+        → [models] → [api]                                                   (planned)
 ```
 
-| Stage | Package | Responsibility |
+| Layer | Package | Responsibility |
 |---|---|---|
-| Cleaning | `src/preprocessing/cleaning/` | Detect + remediate (timestamps, duplicates, physical ranges, frozen sensors, state consistency, missing values). |
-| Time-series | `src/preprocessing/time_series/` | Temporal conversion/index, optional resampling, rolling windows, temporal & state features. |
-| Feature engineering | `src/preprocessing/feature_engineering/` | Temporal derivatives, stability, physical ratios, energetic / operative / statistical-anomaly features. |
-| Specialized datasets | `src/preprocessing/datasets/` | Promote a canonical master dataset + project anomaly-detection / forecasting / energy datasets. |
+| Data Foundation | `src/preprocessing/{cleaning,time_series,feature_engineering,datasets}/` | Detect+remediate cleaning → temporal/state features → cross-column features → a canonical master + model-family datasets. Parameter-free. |
+| Behaviour Intelligence | `src/intelligence/behaviour/` | Operational profiles + per-profile statistical baselines, fit leakage-safe on a train window; emits the `is_train` contract every downstream component reuses. |
+| Correlation · PCA · Anomaly | `src/intelligence/{correlation,pca,anomaly}/` | Per-profile correlation references, RobustScaler+PCA (T²/Q), and four explainable anomaly detectors with a combined severity. |
+| Sensor Health | `src/intelligence/sensor_health/` | Instrumentation-anomaly rule families (flatline, variance collapse, …); recommends quarantine, never auto-excludes. |
+| Drift | `src/intelligence/drift/` | Windowed univariate/multivariate/context/correlation drift vs the train reference; raw vs honestly-labeled `healthy_only_proxy` views. |
+| Incidents | `src/intelligence/incidents/` | Events → reviewable incidents; associative relationships (`causality_status=unknown`); quarantine actions pending human approval. |
+| Reference Governance | `src/intelligence/reference/` | Tracks the immutable `reference_v1` baseline + quarantine/candidate proposals — proposes, never approves, refits, or excludes. |
+| Controlled Scoring | `src/intelligence/scoring_experiment/` | Interpretive post-processing scenarios over persisted scores (never rescores/refits) + a decision-report addendum. |
+| External Context | `src/context/{bom,operational}/` | BOM/operational context joined against the master timeline + persisted scores; analytical only, never a model input. |
 
-Cross-stage contracts (`Finding`, `Severity`, `ColumnGroups`, report writers,
-the strict Pydantic base) live in the neutral `src/preprocessing/_common/` package.
-Project paths are centralized in `src/config.py`; per-stage policy lives in
-`configs/*.yaml`.
+Each Intelligence/Context component is **run-versioned** (`runs/<run_id>/`,
+manifest written last as the completion marker) and verifies **lineage**
+against its upstreams (fail closed on a mismatch). Cross-stage contracts live in
+`src/preprocessing/_common/` (+ `src/intelligence/_common/`); project paths in
+`src/config.py`; policy in `configs/*.yaml`.
 
-See the stage reference docs under [docs/pipeline/](docs/pipeline/):
-`data_cleaning.md`, `time_series_engineering.md`, `feature_engineering.md`,
-`specialized_datasets.md` ([docs/README.md](docs/README.md) is the full map).
+See [docs/architecture/intelligence_dataflow.md](docs/architecture/intelligence_dataflow.md)
+for the end-to-end dataflow + contracts, the stage refs under
+[docs/pipeline/](docs/pipeline/) and [docs/intelligence/](docs/intelligence/),
+and the context refs under [docs/context/](docs/context/)
+([docs/README.md](docs/README.md) is the full map).
 
 ---
 
@@ -73,9 +86,17 @@ InjexCore/
 │   │   ├── time_series/
 │   │   ├── feature_engineering/
 │   │   └── datasets/
-│   └── intelligence/        # Intelligence Layer (characterises normal behaviour)
-│       └── behaviour/       # Operational profiles + statistical baselines (Iteration A)
-├── tests/                   # pytest unit tests mirroring src/preprocessing/
+│   ├── intelligence/        # Intelligence Layer (run-versioned; characterises normal + deviation)
+│   │   ├── _common/         # Run versioning, lineage checks, manifest, behaviour loaders
+│   │   ├── behaviour/       # Operational profiles + statistical baselines (the is_train contract)
+│   │   ├── correlation/ pca/ anomaly/    # Per-profile references + explainable detectors
+│   │   ├── sensor_health/ drift/         # Instrumentation anomalies + windowed drift
+│   │   ├── incidents/ reference/ scoring_experiment/   # Review pack, governance, decision support
+│   │   └── __main__.py      # Component dispatcher (--component <name>)
+│   └── context/             # External Context Layer (read-only joins; analytical only)
+│       ├── bom/             # BOM operational context
+│       └── operational/     # Operational context overlay
+├── tests/                   # pytest unit + integration tests mirroring src/
 ├── pyproject.toml           # Packaging, dependencies, ruff/mypy/pytest config
 ├── requirements.txt         # Pinned runtime mirror
 └── requirements-dev.txt     # Pinned dev tooling mirror
@@ -105,7 +126,7 @@ The editable install puts `src` on the import path, so `import src...` and the
 
 ```bash
 # Generate the synthetic dataset → data/raw/dataset_pro.csv
-python src/data_generation.py
+python -m src.data_generation.generate
 
 # Run individual preprocessing stages (append --no-write for diagnostic-only)
 python -m src.preprocessing.cleaning.run_cleaning
@@ -162,9 +183,19 @@ layer) · matplotlib / seaborn · pytest · ruff · mypy · pre-commit.
 
 ## Status
 
-Preprocessing layer complete (four stages, semantic-driven, with unit tests and
-per-stage reference docs). In progress: anomaly-criterion definition. Not
-started: the classification/anomaly models (`src/models/`), output API, and
+**Done:** the Data Foundation (four preprocessing stages, semantic-driven) and
+the Intelligence Layer — Behaviour, Correlation, PCA, Anomaly, Sensor Health,
+Drift, Incident Aggregation, Reference Governance and the Controlled Scoring
+Experiment — plus the BOM and Operational external-context layers. Every
+Intelligence/Context component is run-versioned (manifest-last) with fail-closed
+lineage checks, covered by unit + integration tests and per-component reference
+docs.
+
+**In progress:** human review of the Iteration C decision report (the pending
+`inlet_hopper_points` quarantine approval and the deferred Reference v2
+candidate). **Not started:** an *approved* Reference v2 (human-gated refit) and a
+true PCA/Mahalanobis rescoring — both explicitly deferred and gated on the
+decision report; predictive models (`src/models/`), output API, and the
 visualization dashboard.
 
 ---

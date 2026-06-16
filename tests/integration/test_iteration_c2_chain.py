@@ -166,7 +166,13 @@ def _write_bom_run(root: Path, ts: pd.Series) -> None:
         ]
     ).to_parquet(run / "orders" / "bom_order_transitions.parquet", index=False)
     (run / "bom_context_manifest.json").write_text(
-        json.dumps({"completion_status": "complete", "run_id": "chain"}),
+        json.dumps(
+            {
+                "component": "bom_context",
+                "completion_status": "complete",
+                "run_id": "chain",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -221,6 +227,8 @@ def _write_anomaly_run(root: Path, ts: pd.Series, profiles: np.ndarray) -> None:
     (run / "anomaly_fit_manifest.json").write_text(
         json.dumps(
             {
+                "component": "anomaly",
+                "completion_status": "complete",
                 "run_id": "chain",
                 "dataset_fingerprint": {
                     "sha256": "synthetic",
@@ -265,6 +273,8 @@ def _write_pca_run(root: Path, ts: pd.Series, profiles: np.ndarray) -> None:
     (run / "pca_fit_manifest.json").write_text(
         json.dumps(
             {
+                "component": "pca",
+                "completion_status": "complete",
                 "run_id": "chain",
                 "dataset_fingerprint": {
                     "sha256": "synthetic",
@@ -278,7 +288,7 @@ def _write_pca_run(root: Path, ts: pd.Series, profiles: np.ndarray) -> None:
     )
 
 
-def _write_correlation_run(root: Path) -> None:
+def _write_correlation_run(root: Path, ts: pd.Series) -> None:
     run = root / "runs" / "chain"
     run.mkdir(parents=True)
     pairs = [
@@ -314,7 +324,20 @@ def _write_correlation_run(root: Path) -> None:
         ]
     ).to_parquet(run / "correlation_shift.parquet", index=False)
     (run / "correlation_fit_manifest.json").write_text(
-        json.dumps({"run_id": "chain"}), encoding="utf-8"
+        json.dumps(
+            {
+                "component": "correlation",
+                "completion_status": "complete",
+                "run_id": "chain",
+                "dataset_fingerprint": {
+                    "sha256": "synthetic",
+                    "n_rows": _N,
+                    "index_start": str(ts.iloc[0]),
+                    "index_end": str(ts.iloc[-1]),
+                },
+            }
+        ),
+        encoding="utf-8",
     )
 
 
@@ -330,11 +353,18 @@ def world(tmp_path: Path) -> dict:
     _bom_timeline_full(tmp_path / "bom", ts)
     _write_anomaly_run(tmp_path / "anomaly", ts, profiles)
     _write_pca_run(tmp_path / "pca", ts, profiles)
-    _write_correlation_run(tmp_path / "correlation")
+    _write_correlation_run(tmp_path / "correlation", ts)
     forensic_root = tmp_path / "forensics"
     (forensic_root / "runs" / "fr1").mkdir(parents=True)
     (forensic_root / "runs" / "fr1" / "forensic_manifest.json").write_text(
-        "{}", encoding="utf-8"
+        json.dumps(
+            {
+                "component": "anomaly_forensic_addendum",
+                "run_id": "fr1",
+                "completion_status": "complete",
+            }
+        ),
+        encoding="utf-8",
     )
 
     op_config = tmp_path / "operational.yaml"

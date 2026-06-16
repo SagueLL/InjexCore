@@ -9,8 +9,10 @@ timeline:
   expected_master_rows: 167331 # hard alignment gate; null disables (tests)
 
 upstream:
-  profile_labels_path: "data/intelligence/behaviour/profiles/profile_labels.parquet"
-  behaviour_manifest_path: "data/intelligence/behaviour/behaviour_fit_manifest.json"
+  # Behaviour is run-versioned; leave these empty to resolve the latest
+  # completed behaviour run, or pin an explicit artifact path here.
+  profile_labels_path: ""
+  behaviour_manifest_path: ""
   sensor_health_root: "data/intelligence/sensor_health"
   sensor_health_run: latest # resolved id is pinned in the run manifest
   bom_root: "data/context/bom"

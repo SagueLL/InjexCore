@@ -128,17 +128,19 @@ def _pair_rows(
         and str(a["incident_type"]) in _EXPLAINABLE_TYPES
     ):
         fault, other = b, a
+    shared_sensors = sensors_a & sensors_b
     if (
         fault is not None
         and other is not None
-        and relation
-        in (
-            "contains",
-            "overlaps",
-        )
+        and relation in ("contains", "overlaps")
+        and shared_sensors
     ):
+        # Option A (INC-01): possibly_explains requires *shared* sensors — the
+        # evidence vocabulary is shared-sensor based, so it is never emitted on
+        # interval overlap alone. Temporal-only pairs are already represented by
+        # the base contains/overlaps row above (empty evidence).
         overlap_confidence = max(
-            confidence * max(sensor_jaccard, 0.1 if not sensors_b else 0.0),
+            confidence * sensor_jaccard,
             policy.relationships.min_confidence,
         )
         rows.append(
@@ -147,7 +149,10 @@ def _pair_rows(
                 other,
                 "possibly_explains",
                 overlap_confidence,
-                {"basis": "interval_overlap_and_shared_sensors"},
+                {
+                    "basis": "interval_overlap_and_shared_sensors",
+                    "sensors": sorted(shared_sensors),
+                },
             )
         )
     if {str(a["incident_type"]), str(b["incident_type"])} == {

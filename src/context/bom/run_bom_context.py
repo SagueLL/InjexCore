@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     generated = _write_artifacts(out, art)
 
     if art.addendum is not None:

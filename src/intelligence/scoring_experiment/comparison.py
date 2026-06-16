@@ -14,10 +14,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.intelligence.scoring_experiment.scoring import (
-    BASELINE_SCENARIO,
-    QUARANTINE_SCENARIO,
-)
+from src.intelligence.scoring_experiment.scoring import BASELINE_SCENARIO
 
 ANOMALY_RATE_COLUMNS = [
     "scenario_id",
@@ -71,16 +68,20 @@ def _top_tokens(series: pd.Series, top: int) -> str:
 
 
 def anomaly_rate_comparison(
-    base: pd.DataFrame, residual_count: int, top: int
+    base: pd.DataFrame, residual_count: int, top: int, quarantine_scenario: str
 ) -> pd.DataFrame:
-    """Per-scenario warning/anomaly counts before and after suppression."""
+    """Per-scenario warning/anomaly counts before and after suppression.
+
+    The quarantine scenario row is omitted when there is no pending quarantine
+    proposal (``quarantine_scenario == ""``).
+    """
     rows_total = int(len(base))
     sev = base["original_severity"]
     orig_warn = int((sev == "warning").sum())
     orig_anom = int((sev == "anomaly").sum())
     nonnormal = sev != "normal"
 
-    suppressed = base["suppressed_for_review"]
+    suppressed = base["row_suppressed_for_review"]
     adj = base["adjusted_review_severity"]
     adj_warn = int((adj == "warning").sum())
     adj_anom = int((adj == "anomaly").sum())
@@ -113,32 +114,37 @@ def anomaly_rate_comparison(
                 "instrumentation-dominated rows."
             ),
         },
-        {
-            "scenario_id": QUARANTINE_SCENARIO,
-            "rows_total": rows_total,
-            "original_warning_count": orig_warn,
-            "original_anomaly_count": orig_anom,
-            "adjusted_warning_count": adj_warn,
-            "adjusted_anomaly_count": adj_anom,
-            "suppressed_count": n_suppressed,
-            "suppression_rate": suppression_rate,
-            "remaining_warning_count": adj_warn,
-            "remaining_anomaly_count": adj_anom,
-            "healthy_only_residual_count": int(residual_count),
-            "top_remaining_sensors": _top_tokens(remaining["affected_variables"], top),
-            "top_remaining_profiles": _top_tokens(remaining["profile"], top),
-            "top_remaining_contexts": _top_tokens(
-                remaining["sensor_health_context"], top
-            ),
-            "interpretation": (
-                f"After down-ranking quarantine-dominated rows for review, "
-                f"{n_suppressed} of {int(nonnormal.sum())} non-normal rows are "
-                f"suppressed ({suppression_rate * 100:.0f}%); the remaining "
-                "rows are the genuine review backlog. Interpretive only — no "
-                "score was changed."
-            ),
-        },
     ]
+    if quarantine_scenario:
+        rows.append(
+            {
+                "scenario_id": quarantine_scenario,
+                "rows_total": rows_total,
+                "original_warning_count": orig_warn,
+                "original_anomaly_count": orig_anom,
+                "adjusted_warning_count": adj_warn,
+                "adjusted_anomaly_count": adj_anom,
+                "suppressed_count": n_suppressed,
+                "suppression_rate": suppression_rate,
+                "remaining_warning_count": adj_warn,
+                "remaining_anomaly_count": adj_anom,
+                "healthy_only_residual_count": int(residual_count),
+                "top_remaining_sensors": _top_tokens(
+                    remaining["affected_variables"], top
+                ),
+                "top_remaining_profiles": _top_tokens(remaining["profile"], top),
+                "top_remaining_contexts": _top_tokens(
+                    remaining["sensor_health_context"], top
+                ),
+                "interpretation": (
+                    f"After down-ranking quarantine-dominated rows for review, "
+                    f"{n_suppressed} of {int(nonnormal.sum())} non-normal rows are "
+                    f"suppressed ({suppression_rate * 100:.0f}%); the remaining "
+                    "rows are the genuine review backlog. Interpretive only — no "
+                    "score was changed."
+                ),
+            }
+        )
     return pd.DataFrame(rows, columns=ANOMALY_RATE_COLUMNS)
 
 
@@ -151,6 +157,7 @@ def incident_comparison(
     incidents: pd.DataFrame,
     suppressed: pd.DataFrame,
     quarantine_sensors: list[str],
+    quarantine_scenario: str,
 ) -> pd.DataFrame:
     """How the incident picture reads under the quarantine interpretation."""
     n_incidents = int(len(incidents))
@@ -175,19 +182,22 @@ def incident_comparison(
             "n_quarantine_dominated_incidents": 0,
             "interpretation": "Original incident picture, as aggregated.",
         },
-        {
-            "scenario_id": QUARANTINE_SCENARIO,
-            "n_incidents": n_incidents,
-            "n_anomaly_burst_incidents": n_burst,
-            "n_suppressed_incidents": int(len(suppressed)),
-            "n_quarantine_dominated_incidents": dominated,
-            "interpretation": (
-                f"{len(suppressed)} burst incident(s) already explained by a "
-                f"sensor fault; {dominated} sensor incident(s) on the "
-                "quarantine target(s). Associative only; nothing approved."
-            ),
-        },
     ]
+    if quarantine_scenario:
+        rows.append(
+            {
+                "scenario_id": quarantine_scenario,
+                "n_incidents": n_incidents,
+                "n_anomaly_burst_incidents": n_burst,
+                "n_suppressed_incidents": int(len(suppressed)),
+                "n_quarantine_dominated_incidents": dominated,
+                "interpretation": (
+                    f"{len(suppressed)} burst incident(s) already explained by a "
+                    f"sensor fault; {dominated} sensor incident(s) on the "
+                    "quarantine target(s). Associative only; nothing approved."
+                ),
+            }
+        )
     return pd.DataFrame(rows, columns=INCIDENT_COMPARISON_COLUMNS)
 
 

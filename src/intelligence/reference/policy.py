@@ -44,7 +44,10 @@ class ReferenceUpstreamPolicy(StrictModel):
     incidents_run: str = "latest"
     drift_root: str = "data/intelligence/drift"
     drift_run: str = "latest"
-    behaviour_manifest: str = "data/intelligence/behaviour/behaviour_fit_manifest.json"
+    # Behaviour is run-versioned; reference_v1 is seeded from the latest
+    # completed behaviour run's self-reported provenance (GOV-01).
+    behaviour_root: str = "data/intelligence/behaviour"
+    behaviour_run: str = "latest"
     master_path: str = "data/datasets/master/master_dataset.parquet"
 
 

@@ -254,9 +254,13 @@ def run(
     df = io.load_master_columns(master_path, _candidate_columns(policy, classification))
     labels_frame = load_profile_labels(
         io.resolve_project_path(policy.upstream.profile_labels_path)
+        if policy.upstream.profile_labels_path
+        else None
     )
     behaviour_manifest = load_behaviour_manifest(
         io.resolve_project_path(policy.upstream.behaviour_manifest_path)
+        if policy.upstream.behaviour_manifest_path
+        else None
     )
     try:
         profile, train_mask = align_labels(df, labels_frame)
@@ -619,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     table_map = {
         io.SCORES_FILE: art.scores,
         io.EVENTS_FILE: art.events,

@@ -14,10 +14,11 @@ from pydantic import Field
 
 from src.preprocessing._common.models import StrictModel
 
-#: Closed scenario vocabulary (the contract).
-SCENARIO_IDS = (
+#: Static scenario ids. The quarantine scenario id is derived at runtime from
+#: the pending proposal sensor(s) — ``quarantine_<sensor>_interpretive`` for a
+#: single target or ``quarantine_proposals_interpretive`` for several (GOV-02).
+STATIC_SCENARIO_IDS = (
     "baseline_v1",
-    "quarantine_inlet_hopper_points_interpretive",
     "healthy_only_proxy",
     "candidate_reference_needed",
 )

@@ -29,12 +29,10 @@ class UpstreamPolicy(StrictModel):
     via the completed-run convention (``latest`` supported).
     """
 
-    profile_labels_path: str = (
-        "data/intelligence/behaviour/profiles/profile_labels.parquet"
-    )
-    behaviour_manifest_path: str = (
-        "data/intelligence/behaviour/behaviour_fit_manifest.json"
-    )
+    # Empty -> resolve the latest completed behaviour run (run-versioned cutover).
+    # Set an explicit path only to pin a specific behaviour artifact (tests).
+    profile_labels_path: str = ""
+    behaviour_manifest_path: str = ""
     sensor_health_root: str = "data/intelligence/sensor_health"
     sensor_health_run: str = "latest"
     bom_root: str = "data/context/bom"

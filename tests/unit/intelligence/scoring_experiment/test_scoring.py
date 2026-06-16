@@ -43,7 +43,7 @@ def test_baseline_severity_immutable(scoring_world: dict[str, Any]) -> None:
     baseline = ss[ss["scenario_id"] == "baseline_v1"]
     # Baseline never adjusts; original == adjusted, nothing suppressed.
     assert (baseline["original_severity"] == baseline["adjusted_review_severity"]).all()
-    assert not baseline["suppressed_for_review"].any()
+    assert not baseline["row_suppressed_for_review"].any()
     # adjusted_review_score equals original_combined_score everywhere (no rescore).
     assert (ss["adjusted_review_score"] == ss["original_combined_score"]).all()
 
@@ -52,7 +52,7 @@ def test_quarantine_suppression_dominant_sensor(scoring_world: dict[str, Any]) -
     run = _run(scoring_world)
     ss = pd.read_parquet(run / io.SCENARIO_SCORES_FILE)
     quar = ss[ss["scenario_id"] == "quarantine_inlet_hopper_points_interpretive"]
-    suppressed = quar[quar["suppressed_for_review"]]
+    suppressed = quar[quar["row_suppressed_for_review"]]
     assert len(suppressed) > 0
     # Every suppressed row is attributed to the faulty sensor and downgraded.
     assert set(suppressed["dominant_faulty_sensor"]) == {"inlet_hopper_points"}
@@ -193,3 +193,19 @@ def test_gate_a_blocks_misaligned_timelines() -> None:
     )
     with pytest.raises(validation.ScoringBlockerError, match="row-aligned"):
         validation.validate_upstream("sha", anomaly, op, {}, {})
+
+
+def test_reference_chain_divergence_is_a_blocker(scoring_world: dict[str, Any]) -> None:
+    """DAT-01: a reference run built from a different chain fails closed."""
+    refman = (
+        scoring_world["tmp_path"]
+        / "reference"
+        / "runs"
+        / "ref1"
+        / "reference_governance_manifest.json"
+    )
+    payload = json.loads(refman.read_text(encoding="utf-8"))
+    payload["drift_run_id"] = "a-different-drift-run"
+    refman.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(validation.ScoringBlockerError, match="divergence"):
+        run_scoring_experiment.main([*scoring_world["args"], "--no-write"])

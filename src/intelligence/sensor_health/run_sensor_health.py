@@ -292,7 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     table_map = {
         io.SCORES_FILE: art.scores,
         io.EVENTS_FILE: art.events,

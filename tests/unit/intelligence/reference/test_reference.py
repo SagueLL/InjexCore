@@ -140,13 +140,49 @@ def test_gate_a_blocks_missing_train_window() -> None:
         )
 
 
+def _behaviour_manifest(sha: str = "sha_now") -> dict[str, Any]:
+    return {
+        "fit_window": {"train_start": "2024-06-14", "train_end": "2024-09-03"},
+        "master_dataset_sha256": sha,
+    }
+
+
 def test_gate_a_blocks_stale_upstream_master() -> None:
     """An upstream run fitted on a different master is a blocker."""
-    behaviour = {"fit_window": {"train_start": "2024-06-14", "train_end": "2024-09-03"}}
     with pytest.raises(validation.ReferenceBlockerError, match="different master"):
         validation.validate_upstream(
             "sha_now",
-            behaviour,
+            _behaviour_manifest("sha_now"),
             {"drift": {"master_dataset_sha256": "sha_old"}},
             {"drift": "d1"},
         )
+
+
+def test_gate_a_blocks_missing_behaviour_provenance() -> None:
+    """No behaviour master sha -> reference_v1 provenance is unverifiable (GOV-01)."""
+    behaviour = {"fit_window": {"train_start": "2024-06-14", "train_end": "2024-09-03"}}
+    with pytest.raises(validation.ReferenceBlockerError, match="master_dataset_sha256"):
+        validation.validate_upstream("sha_now", behaviour, {}, {})
+
+
+def test_gate_a_blocks_behaviour_master_mismatch() -> None:
+    """Behaviour fitted on a different master than the current one blocks (GOV-01)."""
+    with pytest.raises(validation.ReferenceBlockerError, match="different master"):
+        validation.validate_upstream(
+            "sha_now", _behaviour_manifest("sha_behaviour"), {}, {}
+        )
+
+
+def test_reference_v1_uses_behaviour_provenance(
+    reference_world: dict[str, Any],
+) -> None:
+    """reference_v1's sha comes from behaviour's manifest, and the run records it."""
+    run = _run(reference_world)
+    registry = pd.read_parquet(run / io.REGISTRY_FILE)
+    # Behaviour was fit on the same master, so its recorded sha == master sha.
+    assert registry.iloc[0]["dataset_sha256"] == reference_world["master_sha256"]
+    import json
+
+    manifest = json.loads((run / io.MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert manifest["behaviour_run_id"] == "b1"
+    assert manifest["compat_checks"]["behaviour_master_sha_matches"] is True

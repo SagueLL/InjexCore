@@ -34,6 +34,10 @@ import pandas as pd
 
 from src.config import CONFIGS_DIR
 from src.intelligence._common.reporting import Finding, write_json
+from src.intelligence._common.upstream import (
+    BEHAVIOUR_COMPONENT,
+    BEHAVIOUR_MANIFEST_NAME,
+)
 from src.intelligence.reference import (
     decisions,
     io,
@@ -84,10 +88,19 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ReferenceArtifact
     policy = load_policy(config_path)
     master_path = io.resolve_project_path(policy.upstream.master_path)
     master_sha256 = io.file_sha256(master_path)
-    behaviour_manifest_path = io.resolve_project_path(
-        policy.upstream.behaviour_manifest
+    # GOV-01: reference_v1 provenance comes from the latest completed behaviour
+    # run (its manifest self-reports run_id + master_dataset_sha256), never
+    # from the current master sha.
+    behaviour_run_dir = io.resolve_run(
+        io.resolve_project_path(policy.upstream.behaviour_root),
+        policy.upstream.behaviour_run,
+        BEHAVIOUR_MANIFEST_NAME,
+        expected_component=BEHAVIOUR_COMPONENT,
     )
-    behaviour_manifest = io.load_behaviour_manifest(behaviour_manifest_path)
+    behaviour_manifest = io.load_run_manifest(
+        behaviour_run_dir, BEHAVIOUR_MANIFEST_NAME
+    )
+    behaviour_run_id = behaviour_run_dir.name
 
     upstream_manifests = {
         "sensor_health": io.load_run_manifest(
@@ -106,8 +119,11 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ReferenceArtifact
     drift_events = io.load_drift_events(runs.drift)
     raw_vs_healthy = io.load_raw_vs_healthy(runs.drift)
 
+    # Provenance sha is behaviour's, not the current master's (validate_upstream
+    # already proved they match — otherwise it failed closed).
+    behaviour_sha256 = behaviour_manifest["master_dataset_sha256"]
     reference_registry = registry.build_registry(
-        behaviour_manifest, master_sha256, str(behaviour_manifest_path)
+        behaviour_manifest, behaviour_sha256, str(behaviour_run_dir)
     )
     quarantine = proposals.build_quarantine_proposals(
         recommendations,
@@ -137,6 +153,7 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ReferenceArtifact
         run_id,
         runs,
         master_sha256,
+        behaviour_run_id,
         reference_registry,
         candidate_proposals,
         quarantine,
@@ -177,6 +194,7 @@ def _build_manifest(
     run_id: str,
     runs: UpstreamRuns,
     master_sha256: str,
+    behaviour_run_id: str,
     reference_registry: pd.DataFrame,
     candidate_proposals: pd.DataFrame,
     quarantine: pd.DataFrame,
@@ -189,6 +207,7 @@ def _build_manifest(
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
         "master_dataset_sha256": master_sha256,
+        "behaviour_run_id": behaviour_run_id,
         "sensor_health_run_id": runs.sensor_health.name,
         "incidents_run_id": runs.incidents.name,
         "drift_run_id": runs.drift.name,
@@ -293,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     table_map = {
         io.REGISTRY_FILE: art.registry,
         io.PROPOSALS_FILE: art.proposals,

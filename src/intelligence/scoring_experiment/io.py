@@ -32,7 +32,13 @@ import pandas as pd
 from src.config import INTELLIGENCE_DIR, PROJECT_ROOT
 from src.intelligence._common.fingerprint import file_sha256
 from src.intelligence._common.io import write_manifest, write_table
-from src.intelligence._common.runs import LATEST, new_run_id, resolve_run, run_dir
+from src.intelligence._common.runs import (
+    LATEST,
+    create_run_dir,
+    new_run_id,
+    resolve_run,
+    run_dir,
+)
 from src.intelligence.drift.io import (
     load_anomaly_scores,
     load_operational_timeline,
@@ -61,6 +67,7 @@ __all__ = [
     "new_run_id",
     "resolve_run",
     "run_dir",
+    "create_run_dir",
     "write_manifest",
     "write_table",
     "file_sha256",

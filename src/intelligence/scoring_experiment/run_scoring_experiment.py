@@ -129,18 +129,38 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ScoringArtifacts:
     burst_windows = quarantine.suppressed_burst_windows(suppressed, incidents)
     base = scoring.apply_quarantine(base, targets, burst_windows)
 
-    scenario_defs = scenarios.scenario_definitions()
-    scenario_scores = scoring.scenario_scores(base)
-    anomaly_rate = comparison.anomaly_rate_comparison(base, residual_count, top)
+    # GOV-02: scenario identity is derived from the pending proposal sensor(s).
+    quarantine_sensors = list(dict.fromkeys(t.sensor for t in targets if t.sensor))
+    quarantine_scenario = scoring.quarantine_scenario_id(quarantine_sensors)
+
+    scenario_defs = scenarios.scenario_definitions(
+        quarantine_scenario, quarantine_sensors
+    )
+    scenario_scores = scoring.scenario_scores(base, quarantine_scenario)
+    anomaly_rate = comparison.anomaly_rate_comparison(
+        base, residual_count, top, quarantine_scenario
+    )
     incident_cmp = comparison.incident_comparison(
-        incidents, suppressed, [t.sensor for t in targets]
+        incidents, suppressed, quarantine_sensors, quarantine_scenario
     )
     drift_cmp = comparison.drift_comparison(raw_vs_healthy, top)
-    recommendations = reporting.build_recommendations(anomaly_rate, drift_cmp, residual)
+    recommendations = reporting.build_recommendations(
+        anomaly_rate, drift_cmp, residual, quarantine_scenario, quarantine_sensors
+    )
 
-    findings.extend(reporting.build_findings(anomaly_rate, residual))
+    findings.extend(
+        reporting.build_findings(anomaly_rate, residual, quarantine_scenario)
+    )
     manifest = _build_manifest(
-        policy, run_id, runs, master_sha256, base, scenario_scores, residual, compat
+        policy,
+        run_id,
+        runs,
+        master_sha256,
+        base,
+        scenario_scores,
+        scenario_defs,
+        residual,
+        compat,
     )
     report = reporting.render_report(
         scenario_defs,
@@ -150,12 +170,13 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ScoringArtifacts:
         recommendations,
         residual,
         manifest,
+        quarantine_scenario,
     )
     log.info(
         "Scoring experiment: %d non-normal rows, %d suppressed for review, "
         "residual_material=%s",
         int((base["original_severity"] != "normal").sum()),
-        int(base["suppressed_for_review"].sum()),
+        int(base["row_suppressed_for_review"].sum()),
         residual.get("material"),
     )
     return ScoringArtifacts(
@@ -175,6 +196,8 @@ def run(config_path: Path, runs: UpstreamRuns, run_id: str) -> ScoringArtifacts:
             "recommendations": recommendations,
             "residual": residual,
             "upstream_run_ids": runs.run_ids(),
+            "quarantine_sensors": quarantine_sensors,
+            "quarantine_scenario": quarantine_scenario,
         },
     )
 
@@ -186,6 +209,7 @@ def _build_manifest(
     master_sha256: str,
     base: pd.DataFrame,
     scenario_scores: pd.DataFrame,
+    scenario_defs: pd.DataFrame,
     residual: dict[str, Any],
     compat: dict[str, Any],
 ) -> dict[str, Any]:
@@ -200,9 +224,9 @@ def _build_manifest(
         "incidents_run_id": runs.incidents.name,
         "operational_context_run_id": runs.operational.name,
         "reference_run_id": runs.reference.name,
-        "scenario_count": 4,
+        "scenario_count": int(len(scenario_defs)),
         "non_normal_rows": int((base["original_severity"] != "normal").sum()),
-        "suppressed_for_review": int(base["suppressed_for_review"].sum()),
+        "row_suppressed_for_review": int(base["row_suppressed_for_review"].sum()),
         "scenario_score_rows": int(len(scenario_scores)),
         "residual_diagnostic": dict(residual),
         "config_snapshot": policy.model_dump(),
@@ -329,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = io.run_dir(args.output_root, run_id)
+    out = io.create_run_dir(args.output_root, run_id)
     table_map = {
         io.SCENARIO_DEFINITIONS_FILE: art.scenario_defs,
         io.SCENARIO_SCORES_FILE: art.scenario_scores,
@@ -360,6 +384,8 @@ def main(argv: list[str] | None = None) -> int:
             art.decision_inputs["residual"],
             run_id,
             art.decision_inputs["upstream_run_ids"],
+            art.decision_inputs["quarantine_sensors"],
+            art.decision_inputs["quarantine_scenario"],
         )
         decision_files = decision_report.write_decision_report(
             decision_art, decision_out

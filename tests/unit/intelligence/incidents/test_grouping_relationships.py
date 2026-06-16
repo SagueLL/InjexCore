@@ -212,6 +212,7 @@ def test_relationships_types_and_causality_unknown(
             {
                 "candidate_type": "multivariate_shift",
                 "group_family": "multivariate:multivariate_shift",
+                "affected_sensors": "s1",  # shares the faulty sensor
                 "start_timestamp": "2024-09-18 00:00",
                 "end_timestamp": "2024-09-25 00:00",
             },
@@ -230,12 +231,50 @@ def test_relationships_types_and_causality_unknown(
     assert (relationships["causality_status"] == "unknown").all()
     types = set(relationships["relationship_type"])
     assert "contains" in types
-    assert "possibly_explains" in types  # fault contains the multivariate shift
+    assert "possibly_explains" in types  # fault contains + shares s1 with the shift
     explains = relationships[relationships["relationship_type"] == "possibly_explains"]
     fault_id = incidents[incidents["incident_type"] == "sensor_fault"].iloc[0][
         "incident_id"
     ]
     assert (explains["source_incident_id"] == fault_id).all()
+    # INC-01: evidence names the actual shared sensor(s); never claimed falsely.
+    ev = json.loads(explains.iloc[0]["evidence"])
+    assert ev["basis"] == "interval_overlap_and_shared_sensors"
+    assert ev["sensors"] == ["s1"]
+
+
+def test_possibly_explains_requires_shared_sensors(
+    candidate_factory: CandidateFactory, policy_factory: PolicyFactory
+) -> None:
+    """INC-01: interval overlap without shared sensors does NOT possibly_explain."""
+    policy = policy_factory()
+    candidates = candidate_factory(
+        [
+            {
+                "candidate_type": "sensor_fault",
+                "group_family": "s1:flatline_zero",
+                "affected_sensors": "s1",
+                "severity": "critical",
+                "is_persistent": True,
+                "start_timestamp": "2024-09-17 16:00",
+                "end_timestamp": "2024-10-08 14:00",
+            },
+            {
+                "candidate_type": "anomaly_burst",
+                "group_family": "anomaly_burst:anomaly_burst",
+                "affected_sensors": "s2",  # different sensor — no overlap
+                "start_timestamp": "2024-09-18 00:00",
+                "end_timestamp": "2024-09-25 00:00",
+            },
+        ]
+    )
+    incidents = grouping.group_candidates(candidates, policy, _END)
+    relationships = relationships_mod.detect(incidents, policy)
+    types = set(relationships["relationship_type"])
+    # The fault still *contains* the burst temporally, but cannot explain it.
+    assert "contains" in types
+    assert "possibly_explains" not in types
+    assert "shares_sensors" not in types
 
 
 def test_actions_quarantine_flags_hardcoded(

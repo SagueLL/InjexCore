@@ -48,7 +48,7 @@ from src.intelligence._common.manifest import base_manifest
 from src.intelligence._common.persistence import runtime_versions, save_model
 from src.intelligence._common.policy import GLOBAL_PROFILE
 from src.intelligence._common.reporting import Finding, write_json, write_markdown
-from src.intelligence._common.runs import new_run_id, run_dir
+from src.intelligence._common.runs import create_run_dir, new_run_id
 from src.intelligence._common.upstream import (
     DEFAULT_BEHAVIOUR_MANIFEST,
     DEFAULT_PROFILE_LABELS,
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = run_dir(args.output_root, run_id)
+    out = create_run_dir(args.output_root, run_id)
     for profile, m in art.pca.models.items():
         _write_profile_model(out, profile, m)
         write_table(art.scores[profile], io.scores_dir(out, profile) / io.SCORES_FILE)

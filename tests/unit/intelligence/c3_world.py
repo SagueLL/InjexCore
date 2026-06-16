@@ -38,6 +38,9 @@ def _write(df: pd.DataFrame, path: Path) -> None:
 
 def _manifest(run_dir: Path, name: str, payload: dict[str, Any]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
+    # Synthetic runs are *completed* runs: a valid manifest carries a run_id
+    # matching its directory and completion_status == "complete" (ARC-02).
+    payload = {"run_id": run_dir.name, "completion_status": "complete", **payload}
     (run_dir / name).write_text(
         json.dumps(payload, indent=2, default=str), encoding="utf-8"
     )
@@ -53,13 +56,24 @@ def write_master(tmp: Path) -> tuple[Path, str]:
     return path, file_sha256(path)
 
 
-def write_behaviour(tmp: Path) -> Path:
+def write_behaviour(tmp: Path, sha: str) -> Path:
+    """A run-versioned *completed* behaviour run; returns the behaviour root.
+
+    The manifest self-reports its ``run_id`` + ``master_dataset_sha256`` —
+    the provenance Reference Governance seeds ``reference_v1`` from (GOV-01).
+    """
     ts = timestamps()
-    path = tmp / "behaviour" / "behaviour_fit_manifest.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    root = tmp / "behaviour"
+    run = root / "runs" / "b1"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "behaviour_fit_manifest.json").write_text(
         json.dumps(
             {
+                "component": "behaviour",
+                "run_id": "b1",
+                "completion_status": "complete",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "master_dataset_sha256": sha,
                 "fit_timestamp": "2026-01-01T00:00:00+00:00",
                 "fit_window": {
                     "strategy": "fraction",
@@ -69,13 +83,24 @@ def write_behaviour(tmp: Path) -> Path:
                     "train_start": str(ts[0]),
                     "train_end": str(ts[N_TRAIN - 1]),
                 },
+                "train_window": {
+                    "n_train": N_TRAIN,
+                    "n_total": N_ROWS,
+                    "train_start": str(ts[0]),
+                    "train_end": str(ts[N_TRAIN - 1]),
+                },
+                "validation_window": {
+                    "n_val": N_ROWS - N_TRAIN,
+                    "val_start": str(ts[N_TRAIN]),
+                    "val_end": str(ts[-1]),
+                },
                 "sensors": [SENSOR, "granulator_power"],
             },
             indent=2,
         ),
         encoding="utf-8",
     )
-    return path
+    return root
 
 
 def write_sensor_health(tmp: Path, sha: str) -> Path:
@@ -413,6 +438,10 @@ def write_reference_run(tmp: Path, sha: str, material: bool = False) -> Path:
             "component": "reference_governance",
             "run_id": "ref1",
             "master_dataset_sha256": sha,
+            "behaviour_run_id": "b1",
+            "sensor_health_run_id": "s1",
+            "drift_run_id": "dr1",
+            "incidents_run_id": "i1",
             "residual_diagnostic": {
                 "n_windows": 12,
                 "n_residual_windows": 3,

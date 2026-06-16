@@ -71,7 +71,9 @@ Pairwise over start-sorted incidents bounded by the adjacency window:
 interval logic (`contains` / `overlaps` / `temporally_adjacent` /
 `follows`), entity logic (`shares_sensors` / `shares_context`),
 `possibly_explains` (a sensor fault containing/overlapping a burst,
-multivariate shift or correlation break) and `corroborates` (two sensor
+multivariate shift or correlation break **and sharing at least one affected
+sensor** — INC-01: it is never emitted on interval overlap alone, and its
+evidence lists the actual shared sensors) and `corroborates` (two sensor
 faults on the same sensor). Confidence is interval/Jaccard-derived;
 **every row carries `causality_status = "unknown"`**.
 

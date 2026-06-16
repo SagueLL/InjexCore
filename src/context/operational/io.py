@@ -29,7 +29,13 @@ from pathlib import Path
 from src.config import CONTEXT_DIR, INTELLIGENCE_DIR
 from src.context.bom.io import file_sha256, resolve_project_path
 from src.intelligence._common.io import write_manifest, write_table
-from src.intelligence._common.runs import LATEST, new_run_id, resolve_run, run_dir
+from src.intelligence._common.runs import (
+    LATEST,
+    create_run_dir,
+    new_run_id,
+    resolve_run,
+    run_dir,
+)
 from src.intelligence.sensor_health.io import load_master_columns
 
 __all__ = [
@@ -41,6 +47,7 @@ __all__ = [
     "new_run_id",
     "resolve_run",
     "run_dir",
+    "create_run_dir",
     "write_manifest",
     "write_table",
     "file_sha256",

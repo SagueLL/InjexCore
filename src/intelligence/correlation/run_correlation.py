@@ -44,7 +44,7 @@ from src.intelligence._common.io import (
 )
 from src.intelligence._common.manifest import base_manifest
 from src.intelligence._common.reporting import Finding, write_json, write_markdown
-from src.intelligence._common.runs import new_run_id, run_dir
+from src.intelligence._common.runs import create_run_dir, new_run_id
 from src.intelligence._common.upstream import (
     DEFAULT_BEHAVIOUR_MANIFEST,
     DEFAULT_PROFILE_LABELS,
@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = run_dir(args.output_root, run_id)
+    out = create_run_dir(args.output_root, run_id)
     write_table(art.correlation.correlations, out / io.CORRELATIONS_FILE)
     write_table(art.correlation.excluded, out / io.EXCLUDED_FILE)
     write_table(art.strong, out / io.STRONG_FILE)

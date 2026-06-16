@@ -83,12 +83,10 @@ class UpstreamRunsPolicy(StrictModel):
     convention (``latest`` supported, or a pinned id for reproducibility).
     """
 
-    profile_labels_path: str = (
-        "data/intelligence/behaviour/profiles/profile_labels.parquet"
-    )
-    behaviour_manifest_path: str = (
-        "data/intelligence/behaviour/behaviour_fit_manifest.json"
-    )
+    # Empty -> resolve the latest completed behaviour run (run-versioned cutover).
+    # Set an explicit path only to pin a specific behaviour artifact (tests).
+    profile_labels_path: str = ""
+    behaviour_manifest_path: str = ""
     anomaly_root: str = "data/intelligence/anomaly"
     anomaly_run: str = "latest"
     pca_root: str = "data/intelligence/pca"

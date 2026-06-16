@@ -43,17 +43,29 @@ human quarantine approval, under a separate refit experiment.
 | Scenario | Granularity | What it does |
 |---|---|---|
 | `baseline_v1` | per-row | Original persisted scores, unchanged. |
-| `quarantine_inlet_hopper_points_interpretive` | per-row | Down-ranks the **review severity** of rows whose evidence is dominated by the pending-quarantine sensor. |
+| `quarantine_<sensor>_interpretive` | per-row | Down-ranks the **review severity** of rows whose own evidence is dominated by the pending-quarantine sensor. |
 | `healthy_only_proxy` | window | Reads the drift run's raw-vs-healthy comparison; labels every output a proxy. |
 | `candidate_reference_needed` | diagnostic | Decides whether residual healthy-only drift justifies *designing* a Reference v2. No training. |
 
+The quarantine scenario id is **derived** from the pending proposal sensor(s),
+not hardcoded (GOV-02): one target → `quarantine_<sensor>_interpretive`
+(e.g. `quarantine_inlet_hopper_points_interpretive` on the real data), several →
+`quarantine_proposals_interpretive`, none → no quarantine scenario.
+
 ### Scenario 1 — quarantine-aware (the core interpretive step)
 
-A non-normal row is `suppressed_for_review` when a quarantine-target sensor
-appears in its anomaly `affected_variables` **and** sensor-health marks that
-sensor faulty/quarantined at that timestamp **and** the timestamp is inside the
-quarantine window; or when the row falls inside a suppressed-duplicate burst
-window explained by a sensor fault. For suppressed rows:
+Two notions are kept **separate** (LOG-01):
+
+* `incident_explained_for_review` — the row lies inside an anomaly-burst window
+  already explained by a sensor fault. This is incident-level *coverage* and is
+  recorded for **every** non-normal row in the window, suppressed or not.
+* `row_suppressed_for_review` — the row is actually down-ranked, which requires
+  its **own** row-level evidence (`row_level_evidence_match`): the quarantine
+  sensor appears in the row's anomaly `affected_variables` (for a pending
+  target, also faulty/quarantined at that timestamp inside the window).
+
+An unrelated process anomaly inside an explained burst window is therefore
+reported as incident-explained but **stays unsuppressed**. For suppressed rows
 `dominant_faulty_sensor` is set, `adjusted_review_severity` becomes `normal`,
 and **`original_severity` / `original_combined_score` are untouched**.
 
@@ -95,8 +107,11 @@ decision_summary.md              reference_decision_manifest.json   (written LAS
 ### Decision matrix
 
 Evaluates `do_nothing`, `inspect_sensor_channel`,
-`approve_quarantine_inlet_hopper_points`, `controlled_rescore_after_quarantine`,
-`design_reference_candidate_v2`, `collect_plant_records` — each with
+`approve_quarantine_<sensor>` (derived from the proposal —
+`approve_quarantine_inlet_hopper_points` on the real data, or
+`approve_quarantine_proposed_sensors` for several),
+`controlled_rescore_after_quarantine`, `design_reference_candidate_v2`,
+`collect_plant_records` — each with
 `recommended, priority, expected_benefit, risk_if_done, risk_if_not_done,
 requires_human_approval, requires_model_refit, requires_external_records,
 supporting_evidence, blocking_uncertainties`.

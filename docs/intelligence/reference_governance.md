@@ -21,14 +21,19 @@ plus the behaviour fit manifest and the master file:
 * **sensor-health** run — quarantine recommendations + faulty events;
 * **incidents** run — incidents (sensor-fault ids) + recommended actions;
 * **drift** run — drift events + the raw-vs-healthy-only comparison;
-* **behaviour fit manifest** — the immutable train window of `reference_v1`;
-* **master dataset** — hashed with `file_sha256` for the registry + Gate A.
+* **behaviour run** — the latest *completed* run-versioned behaviour run; its
+  manifest self-reports the train window **and** `master_dataset_sha256`, the
+  provenance `reference_v1` is seeded from (GOV-01);
+* **master dataset** — hashed with `file_sha256` for Gate A.
 
 ### Gate A — upstream compatibility
 
-Stop (never degrade) when: the behaviour manifest has no train window, or any
+Stop (never degrade) when: the behaviour manifest has no train window; the
+behaviour manifest carries **no** `master_dataset_sha256` or one that differs
+from the current master (so `reference_v1` provenance is unverifiable); or any
 upstream run that records a `master_dataset_sha256` was fitted on a *different*
-master than the one on disk. A mismatch means an upstream run is stale.
+master than the one on disk. `reference_v1.dataset_sha256` is the behaviour
+manifest's sha — never the current master substituted in.
 
 ## 2. Reference registry
 
@@ -41,7 +46,7 @@ reference_type      = baseline
 status              = current
 source_train_start  = <behaviour fit_window.train_start>
 source_train_end    = <behaviour fit_window.train_end>
-dataset_sha256      = file_sha256(master)
+dataset_sha256      = <behaviour manifest master_dataset_sha256>   # GOV-01 provenance
 excluded_sensors    = ""        reason = "original leakage-safe train reference"
 ```
 

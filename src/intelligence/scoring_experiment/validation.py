@@ -12,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.intelligence._common import lineage
 from src.intelligence._common.reporting import Finding
 
 CHECK = "controlled_scoring_experiment"
@@ -54,4 +55,18 @@ def validate_upstream(
                 f"(sha {recorded} != {master_sha256}); re-run the upstream "
                 "component before the scoring experiment."
             )
+
+    # DAT-01: the reference run must have been built from the same
+    # sensor-health / drift / incidents chain this experiment scores, or the
+    # quarantine proposals it carries describe a different episode.
+    reference = upstream_manifests.get("reference", {})
+    for name, key in (
+        ("sensor_health", "sensor_health_run_id"),
+        ("drift", "drift_run_id"),
+        ("incidents", "incidents_run_id"),
+    ):
+        pinned = reference.get(key)
+        resolved = run_ids.get(name)
+        compat[f"reference_{name}_run_matches"] = pinned == resolved
+        lineage.assert_run_pin(name, pinned, resolved, ScoringBlockerError)
     return compat, findings

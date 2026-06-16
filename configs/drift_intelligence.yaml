@@ -17,8 +17,10 @@ profiles:
   global_fallback: false
 
 upstream:
-  profile_labels_path: data/intelligence/behaviour/profiles/profile_labels.parquet
-  behaviour_manifest_path: data/intelligence/behaviour/behaviour_fit_manifest.json
+  # Behaviour is run-versioned; leave these empty to resolve the latest
+  # completed behaviour run, or pin an explicit artifact path here.
+  profile_labels_path: ""
+  behaviour_manifest_path: ""
   anomaly_root: data/intelligence/anomaly
   anomaly_run: latest # pin to a concrete id for reproducibility at sign-off
   pca_root: data/intelligence/pca

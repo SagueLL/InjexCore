@@ -7,12 +7,19 @@ and operations.
 ```
 docs/
 ├── README.md          # this index
+├── architecture/      # end-to-end dataflow + cross-component contracts
 ├── pipeline/          # technical reference for each pipeline stage (how it works)
 ├── intelligence/      # Intelligence Layer reference docs (behaviour, anomaly, …)
 ├── context/           # external operational-context layer docs (BOM, …)
 ├── project-state/     # versioned MASTER_VERSION snapshots (point-in-time truth)
 └── proposals/         # improvement proposals, RFCs, planning ahead of a version
 ```
+
+## architecture/ — system-wide dataflow & contracts
+
+| Doc | Covers |
+|---|---|
+| [architecture/intelligence_dataflow.md](architecture/intelligence_dataflow.md) | End-to-end dataflow, run-versioning + manifest-last + lineage contracts, original-vs-interpretive scores, no-auto-quarantine/refit policy, limitations. |
 
 ## pipeline/ — stage reference docs
 

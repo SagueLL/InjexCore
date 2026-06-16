@@ -75,6 +75,9 @@ def _write(df: pd.DataFrame, path: Path) -> None:
 
 def _manifest(run_dir: Path, name: str, payload: dict[str, Any]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
+    # Synthetic runs are *completed* runs (ARC-02): run_id matches the dir,
+    # completion_status == "complete".
+    payload = {"run_id": run_dir.name, "completion_status": "complete", **payload}
     (run_dir / name).write_text(
         json.dumps(payload, indent=2, default=str), encoding="utf-8"
     )

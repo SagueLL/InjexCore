@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 
 from src.intelligence.scoring_experiment import io
+from src.intelligence.scoring_experiment.scoring import sanitize_sensor
 
 DECISION_MATRIX_COLUMNS = [
     "action",
@@ -52,28 +53,43 @@ _TABLES = [
     "required_plant_records",
 ]
 
-_PLANT_RECORDS = [
-    (
-        "maintenance log",
-        "confirm whether inlet_hopper_points was serviced/failed",
-        "approve_quarantine_inlet_hopper_points",
-    ),
-    (
-        "sensor channel log",
-        "confirm the instrumentation channel failure",
-        "inspect_sensor_channel",
-    ),
-    (
-        "operator notes",
-        "context for the September operational shift",
-        "design_reference_candidate_v2",
-    ),
-    (
-        "setpoint changes",
-        "rule out a deliberate process change",
-        "design_reference_candidate_v2",
-    ),
-]
+
+def _quarantine_action(sensors: list[str]) -> str:
+    """Deterministic decision-matrix action name for the quarantine target(s)."""
+    uniq = list(dict.fromkeys(s for s in sensors if s))
+    if not uniq:
+        return "approve_quarantine"
+    if len(uniq) == 1:
+        return f"approve_quarantine_{sanitize_sensor(uniq[0])}"
+    return "approve_quarantine_proposed_sensors"
+
+
+def _plant_records(
+    quarantine_action: str, sensors_text: str
+) -> list[tuple[str, str, str]]:
+    """Required plant records — generic, plus a sensor-specific maintenance entry."""
+    return [
+        (
+            "maintenance log",
+            f"confirm whether {sensors_text} was serviced/failed",
+            quarantine_action,
+        ),
+        (
+            "sensor channel log",
+            "confirm the instrumentation channel failure",
+            "inspect_sensor_channel",
+        ),
+        (
+            "operator notes",
+            "context for the operational shift around the fault window",
+            "design_reference_candidate_v2",
+        ),
+        (
+            "setpoint changes",
+            "rule out a deliberate process change",
+            "design_reference_candidate_v2",
+        ),
+    ]
 
 
 @dataclass(frozen=True)
@@ -88,7 +104,13 @@ class DecisionReportArtifacts:
     manifest: dict[str, Any]
 
 
-def _decision_matrix(material: bool, suppressed: int, rate: float) -> pd.DataFrame:
+def _decision_matrix(
+    material: bool,
+    suppressed: int,
+    rate: float,
+    quarantine_action: str,
+    has_quarantine: bool,
+) -> pd.DataFrame:
     evidence = f"suppressed={suppressed};suppression_rate={rate:.3f};residual_material={material}"
     rows = [
         {
@@ -118,12 +140,14 @@ def _decision_matrix(material: bool, suppressed: int, rate: float) -> pd.DataFra
             "blocking_uncertainties": "needs physical/plant confirmation",
         },
         {
-            "action": "approve_quarantine_inlet_hopper_points",
-            "recommended": True,
-            "priority": "high",
+            "action": quarantine_action,
+            "recommended": has_quarantine,
+            "priority": "high" if has_quarantine else "none",
             "expected_benefit": (
                 f"removes ~{rate * 100:.0f}% of non-normal rows that are "
                 "instrumentation-dominated from the review backlog"
+                if has_quarantine
+                else "no pending quarantine proposal to approve"
             ),
             "risk_if_done": "a co-located process signal could be hidden (reversible)",
             "risk_if_not_done": "anomaly mass keeps masking genuine process signals",
@@ -216,26 +240,50 @@ def build_decision_report(
     residual: dict[str, Any],
     run_id: str,
     upstream_run_ids: dict[str, str],
+    quarantine_sensors: list[str],
+    quarantine_scenario: str,
 ) -> DecisionReportArtifacts:
-    """Assemble the decision pack (pure; no writes)."""
-    q = anomaly_rate[
-        anomaly_rate["scenario_id"] == "quarantine_inlet_hopper_points_interpretive"
-    ]
+    """Assemble the decision pack (pure; no writes).
+
+    Scenario id, decision-matrix action, plant records and summary text are
+    derived from the pending proposal sensor(s) — never hardcoded (GOV-02).
+    """
+    has_quarantine = bool(quarantine_scenario)
+    q = (
+        anomaly_rate[anomaly_rate["scenario_id"] == quarantine_scenario]
+        if has_quarantine
+        else anomaly_rate.iloc[0:0]
+    )
     suppressed = int(q["suppressed_count"].iloc[0]) if len(q) else 0
     rate = float(q["suppression_rate"].iloc[0]) if len(q) else 0.0
     material = bool(residual.get("material", False))
+    sensors_text = ", ".join(quarantine_sensors) if quarantine_sensors else "n/a"
+    quarantine_action = _quarantine_action(quarantine_sensors)
 
-    matrix = _decision_matrix(material, suppressed, rate)
+    matrix = _decision_matrix(
+        material, suppressed, rate, quarantine_action, has_quarantine
+    )
     candidate_actions = _candidate_actions(matrix)
     risk = _risk_assessment(matrix)
-    plant_records = pd.DataFrame(_PLANT_RECORDS, columns=PLANT_RECORD_COLUMNS)
-    summary = _summary(suppressed, rate, residual, run_id, upstream_run_ids)
+    plant_records = pd.DataFrame(
+        _plant_records(quarantine_action, sensors_text), columns=PLANT_RECORD_COLUMNS
+    )
+    summary = _summary(
+        suppressed,
+        rate,
+        residual,
+        run_id,
+        upstream_run_ids,
+        sensors_text,
+        has_quarantine,
+    )
     manifest = {
         "component": "reference_decision",
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
         "upstream_run_ids": dict(upstream_run_ids),
         "quarantine_proposals": int(len(reference_quarantine)),
+        "quarantine_sensors": list(quarantine_sensors),
         "candidate_proposals": int(len(reference_proposals)),
         "residual_material": material,
         "tables": list(_TABLES),
@@ -264,12 +312,21 @@ def _summary(
     residual: dict[str, Any],
     run_id: str,
     upstream_run_ids: dict[str, str],
+    sensors_text: str,
+    has_quarantine: bool,
 ) -> str:
     material = bool(residual.get("material", False))
     v2 = (
         "design a Reference v2 after plant-record review"
         if material
         else "defer Reference v2 (residual healthy-only drift is immaterial)"
+    )
+    quarantine_line = (
+        "2. Approve the quarantine **only after** human review "
+        f"(would clear ~{rate * 100:.0f}% / {suppressed} of the non-normal "
+        "review rows; interpretive)."
+        if has_quarantine
+        else "2. No pending quarantine proposal — nothing to approve."
     )
     return "\n".join(
         [
@@ -281,10 +338,8 @@ def _summary(
             "",
             "## Recommended order (decision-support only)",
             "",
-            "1. Inspect/confirm the `inlet_hopper_points` channel failure.",
-            "2. Approve the quarantine **only after** human review "
-            f"(would clear ~{rate * 100:.0f}% / {suppressed} of the non-normal "
-            "review rows; interpretive).",
+            f"1. Inspect/confirm the `{sensors_text}` channel failure.",
+            quarantine_line,
             "3. Run a controlled rescoring/refit experiment **only after** "
             "quarantine approval.",
             f"4. {v2[0].upper() + v2[1:]}.",
