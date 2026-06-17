@@ -4,12 +4,29 @@ param()
 $ErrorActionPreference = 'SilentlyContinue'
 
 # ── USER CONFIG ───────────────────────────────────────────────────────────────
-# Set to your Claude.ai plan:  'pro' | 'max5' | 'max20' | 'api'
-# - pro   = Claude Pro   ($20/mo)
-# - max5  = Claude Max   ($100/mo, 5x Pro)
-# - max20 = Claude Max   ($200/mo, 20x Pro)
-# - api   = Direct API   (pay-per-token; no monthly budget bar shown)
-$Plan = 'max5'
+# Token budgets are expressed in OUTPUT tokens (the tokens you generate).
+#
+#   $WeeklyBudget  — the number treated as 100%. Claude does NOT store your real
+#                    plan limit in any local file (the /usage figure is fetched
+#                    live from Anthropic's servers), so this is a fixed reference
+#                    you control. 1,000,000 ≈ the "1M" figure; tweak freely.
+#   $BarScale      — what the session bar's 100% equals. Defaults to the weekly
+#                    budget, so one session usually fills only a sliver. Lower it
+#                    (e.g. 200000) if you want the bar to move more per session.
+#   $WeekWindowDays— rolling window for the "wk" figure. Anthropic's exact weekly
+#                    reset isn't knowable locally, so a 7-day rolling window is
+#                    used as an honest approximation.
+$WeeklyBudget   = 1000000
+$BarScale       = $WeeklyBudget
+$WeekWindowDays = 7
+
+# Where every project's session transcripts live. The "wk" total is aggregated
+# across ALL of them (account-wide), which is why it survives closing a terminal.
+$ProjectsRoot   = Join-Path $env:USERPROFILE '.claude\projects'
+
+# Tiny cache so the account-wide weekly scan doesn't re-parse on every render.
+$CachePath      = Join-Path $env:USERPROFILE '.claude\statusline_usage_cache.json'
+$CacheTtlSec    = 8
 # ─────────────────────────────────────────────────────────────────────────────
 
 $raw = [Console]::In.ReadToEnd()
@@ -18,134 +35,147 @@ if ([string]::IsNullOrWhiteSpace($raw)) { return }
 try { $ctx = $raw | ConvertFrom-Json } catch { return }
 
 $transcriptPath = $ctx.transcript_path
-$modelId        = if ($null -ne $ctx.model -and $null -ne $ctx.model.id)           { [string]$ctx.model.id           } else { '' }
-$modelDisplay   = if ($null -ne $ctx.model -and $null -ne $ctx.model.display_name) { [string]$ctx.model.display_name } else { 'claude' }
+$modelId      = if ($null -ne $ctx.model -and $null -ne $ctx.model.id)           { [string]$ctx.model.id           } else { '' }
+$modelDisplay = if ($null -ne $ctx.model -and $null -ne $ctx.model.display_name) { [string]$ctx.model.display_name } else { 'claude' }
 
-# ── Model → context window ────────────────────────────────────────────────────
-# All Claude 4.x / Fable 5 share a 200 k window; update here if a new model differs.
-$ctxWindow = switch -Regex ($modelId) {
-    'claude-3-5-sonnet|claude-3-opus|claude-3-haiku' { 200000 }
-    default                                           { 200000 }
+# ── Helpers ────────────────────────────────────────────────────────────────────
+$utcStyles = [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor `
+             [System.Globalization.DateTimeStyles]::AssumeUniversal
+$invariant = [System.Globalization.CultureInfo]::InvariantCulture
+
+function Read-UsageLine {
+    # Parses one transcript JSONL line. Returns $null unless it carries a usage
+    # block. Anchors at "usage":{ so the model's own prose (which may contain the
+    # literal "output_tokens") can never be mistaken for the real counter.
+    param([string]$Line)
+
+    $ui = $Line.IndexOf('"usage":{')
+    if ($ui -lt 0) { return $null }
+    $tail = $Line.Substring($ui)
+
+    $oM = [regex]::Match($tail, '"output_tokens":(\d+)')
+    if (-not $oM.Success) { return $null }
+
+    $tsUtc = $null
+    $tM = [regex]::Match($tail, '"timestamp":"([^"]+)"')   # top-level ts sits after usage
+    if ($tM.Success) {
+        $parsed = [datetime]::MinValue
+        if ([datetime]::TryParse($tM.Groups[1].Value, $invariant, $utcStyles, [ref]$parsed)) {
+            $tsUtc = $parsed
+        }
+    }
+
+    $speed = ''
+    $sM = [regex]::Match($tail, '"speed":"([a-z]+)"')
+    if ($sM.Success) { $speed = $sM.Groups[1].Value }
+
+    $model = ''
+    $mM = [regex]::Match($Line, '"model":"(claude[^"]+)"')
+    if ($mM.Success) { $model = $mM.Groups[1].Value }
+
+    return @{
+        Out          = [long]$oM.Groups[1].Value
+        TimestampUtc = $tsUtc
+        Speed        = $speed
+        Model        = $model
+        HasThink     = ($Line.IndexOf('"type":"thinking"') -ge 0)
+    }
 }
 
-# ── Model → API pricing (USD / M tokens) ──────────────────────────────────────
-$priceIn = 3.0; $priceOut = 15.0; $priceCacheR = 0.30; $priceCacheW = 3.75
-switch -Regex ($modelId) {
-    'opus' {
-        $priceIn = 15.0; $priceOut = 75.0
-        $priceCacheR = 1.50; $priceCacheW = 18.75
-    }
-    'haiku' {
-        $priceIn = 0.80; $priceOut = 4.00
-        $priceCacheR = 0.08; $priceCacheW = 1.00
-    }
-    # sonnet / fable / unknown → defaults (sonnet pricing)
+function Format-Tokens {
+    param([long]$n)
+    if ($n -ge 1000000) { return ('{0}M' -f [math]::Round($n / 1e6, 2)) }
+    if ($n -ge 1000)    { return ('{0}k' -f [math]::Round($n / 1e3, 1)) }
+    return [string]$n
 }
 
-# ── Parse transcript ──────────────────────────────────────────────────────────
-$sumIn = 0L; $sumOut = 0L; $sumCacheR = 0L; $sumCacheW = 0L
-$lastIn = 0;  $lastCacheR = 0;  $lastCacheW = 0;  $lastOut = 0
-$lastSpeed   = 'standard'
-$lastModel   = $modelId
-$sessionMode = 'normal'
-$lastHasThink = $false
-$haveLast     = $false
+function New-Bar {
+    param([double]$pct, [int]$cells)
+    $filled = [int][math]::Min($cells, [math]::Max(0, [math]::Floor(($pct / 100.0) * $cells)))
+    return ('#' * $filled) + ('-' * ($cells - $filled))
+}
 
-if ($transcriptPath -and (Test-Path $transcriptPath)) {
-    $lines = Get-Content -LiteralPath $transcriptPath
-    foreach ($line in $lines) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        try { $entry = $line | ConvertFrom-Json } catch { continue }
+# ── Session output (the bar) — current transcript only, every render ───────────
+$sessionOut = 0L
+$lastSpeed  = ''
+$lastThink  = $false
+$lastModel  = $modelId
 
-        # Session mode entry (appears once at the top of a session)
-        if ($entry.type -eq 'mode' -and $entry.mode) {
-            $sessionMode = [string]$entry.mode
-            continue
+if ($transcriptPath -and (Test-Path -LiteralPath $transcriptPath)) {
+    try {
+        foreach ($line in [System.IO.File]::ReadLines($transcriptPath)) {
+            if ($line.IndexOf('"usage":{') -lt 0) { continue }
+            $u = Read-UsageLine $line
+            if ($null -eq $u) { continue }
+            $sessionOut += $u.Out
+            if ($u.Speed) { $lastSpeed = $u.Speed }
+            if ($u.Model) { $lastModel = $u.Model }
+            $lastThink = $u.HasThink
         }
+    } catch { }
+}
 
-        # Usage is in message.usage (assistant turns) or root usage (some entries)
-        $u = $null
-        if ($null -ne $entry.message -and $null -ne $entry.message.usage) { $u = $entry.message.usage }
-        elseif ($null -ne $entry.usage) { $u = $entry.usage }
-        if ($null -eq $u) { continue }
+# ── Weekly output (persistent) — all projects, rolling window, cached ──────────
+$nowUtc    = (Get-Date).ToUniversalTime()
+$cutoffUtc = $nowUtc.AddDays(-$WeekWindowDays)
+$weeklyOut = $null
 
-        $inTok  = if ($u.PSObject.Properties['input_tokens'])                { [long]$u.input_tokens }                else { 0L }
-        $cacheR = if ($u.PSObject.Properties['cache_read_input_tokens'])     { [long]$u.cache_read_input_tokens }     else { 0L }
-        $cacheC = if ($u.PSObject.Properties['cache_creation_input_tokens']) { [long]$u.cache_creation_input_tokens } else { 0L }
-        $outTok = if ($u.PSObject.Properties['output_tokens'])               { [long]$u.output_tokens }               else { 0L }
-
-        $sumIn     += $inTok
-        $sumCacheR += $cacheR
-        $sumCacheW += $cacheC
-        $sumOut    += $outTok
-
-        # Per-turn snapshot for context bar
-        $lastIn = [int]$inTok; $lastCacheR = [int]$cacheR; $lastCacheW = [int]$cacheC; $lastOut = [int]$outTok
-        $haveLast = $true
-
-        # speed field ("standard" | "fast") surfaced by Claude Code
-        if ($u.PSObject.Properties['speed']) { $lastSpeed = [string]$u.speed }
-
-        # Model used for this specific turn (may differ from ctx if switched mid-session)
-        if ($null -ne $entry.message -and $entry.message.PSObject.Properties['model']) {
-            $lastModel = [string]$entry.message.model
-        }
-
-        # Detect extended thinking: any content block of type "thinking"
-        $lastHasThink = $false
-        if ($null -ne $entry.message -and $null -ne $entry.message.content) {
-            foreach ($block in $entry.message.content) {
-                if ($block.type -eq 'thinking') { $lastHasThink = $true; break }
+try {
+    if (Test-Path -LiteralPath $CachePath) {
+        $c = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
+        $cachedAt = [datetime]::MinValue
+        if ([datetime]::TryParse([string]$c.computedAtUtc, $invariant, $utcStyles, [ref]$cachedAt)) {
+            $age = ($nowUtc - $cachedAt).TotalSeconds
+            if ($age -ge 0 -and $age -lt $CacheTtlSec -and [int]$c.windowDays -eq $WeekWindowDays) {
+                $weeklyOut = [long]$c.weeklyOut
             }
         }
     }
-}
+} catch { }
 
-# ── Re-derive pricing from the model actually used in the last turn ────────────
-if ($lastModel -ne $modelId -and -not [string]::IsNullOrEmpty($lastModel)) {
-    switch -Regex ($lastModel) {
-        'opus'  {
-            $priceIn = 15.0; $priceOut = 75.0
-            $priceCacheR = 1.50; $priceCacheW = 18.75
-        }
-        'haiku' {
-            $priceIn = 0.80; $priceOut = 4.00
-            $priceCacheR = 0.08; $priceCacheW = 1.00
-        }
-        default {
-            $priceIn = 3.0; $priceOut = 15.0
-            $priceCacheR = 0.30; $priceCacheW = 3.75
-        }
+if ($null -eq $weeklyOut) {
+    $weeklyOut = 0L
+    if (Test-Path -LiteralPath $ProjectsRoot) {
+        try {
+            $files = Get-ChildItem -LiteralPath $ProjectsRoot -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
+                     Where-Object { $_.LastWriteTimeUtc -ge $cutoffUtc }
+            foreach ($f in $files) {
+                try {
+                    foreach ($line in [System.IO.File]::ReadLines($f.FullName)) {
+                        if ($line.IndexOf('"usage":{') -lt 0) { continue }
+                        $u = Read-UsageLine $line
+                        if ($null -eq $u) { continue }
+                        if ($null -ne $u.TimestampUtc -and $u.TimestampUtc -lt $cutoffUtc) { continue }
+                        $weeklyOut += $u.Out
+                    }
+                } catch { }
+            }
+        } catch { }
     }
+    try {
+        @{
+            computedAtUtc = $nowUtc.ToString('o')
+            weeklyOut     = $weeklyOut
+            windowDays    = $WeekWindowDays
+        } | ConvertTo-Json -Compress | Set-Content -LiteralPath $CachePath -Encoding UTF8
+    } catch { }
 }
 
-# ── Effort tag ────────────────────────────────────────────────────────────────
-# Priority: thinking > fast > session mode > model family default
-$effortTag = switch -Regex ($modelId) {
-    'opus'   { 'high'  }
-    'haiku'  { 'lite'  }
-    default  { 'auto'  }
+# ── Effort tag (thinking > fast > model-family default) ────────────────────────
+$effortTag = 'auto'
+switch -Regex ($modelId) {
+    'opus'  { $effortTag = 'high' }
+    'haiku' { $effortTag = 'lite' }
 }
-if ($sessionMode -eq 'fast' -or $lastSpeed -eq 'fast')  { $effortTag = 'fast'  }
-if ($lastHasThink)                                       { $effortTag = 'think' }
+if ($lastSpeed -eq 'fast') { $effortTag = 'fast' }
+if ($lastThink)            { $effortTag = 'think' }
 
-# ── Context bar ────────────────────────────────────────────────────────────────
-$ctxTokens = if ($haveLast) { $lastIn + $lastCacheR + $lastCacheW + $lastOut } else { 0 }
-$ctxPct    = if ($ctxWindow -gt 0) { [math]::Min(100, [math]::Round(($ctxTokens / $ctxWindow) * 100, 1)) } else { 0 }
+# ── Percentages ────────────────────────────────────────────────────────────────
+$sessPct = if ($BarScale -gt 0)     { [math]::Min(100, [math]::Round(($sessionOut / [double]$BarScale) * 100, 1)) } else { 0 }
+$wkPct   = if ($WeeklyBudget -gt 0) {                   [math]::Round(($weeklyOut  / [double]$WeeklyBudget) * 100, 1) } else { 0 }
 
-$cells  = 16
-$filled = [int][math]::Min($cells, [math]::Max(0, [math]::Floor(($ctxPct / 100) * $cells)))
-$bar    = ('#' * $filled) + ('-' * ($cells - $filled))
-
-# ── Cost (API-equivalent USD) ─────────────────────────────────────────────────
-$costRaw = (([double]$sumIn     / 1e6) * $priceIn)    +
-           (([double]$sumOut    / 1e6) * $priceOut)   +
-           (([double]$sumCacheR / 1e6) * $priceCacheR) +
-           (([double]$sumCacheW / 1e6) * $priceCacheW)
-
-# ── Plan budget indicator ──────────────────────────────────────────────────────
-# Shows what fraction of the plan's monthly API-equivalent budget this session used.
-$planMonthly = switch ($Plan) { 'pro' { 20.0 }; 'max5' { 100.0 }; 'max20' { 200.0 }; default { 0.0 } }
+$cells = 14
+$bar   = New-Bar $sessPct $cells
 
 # ── ANSI colours ───────────────────────────────────────────────────────────────
 $esc   = [char]27
@@ -158,7 +188,8 @@ $yel   = "$esc[33m"
 $red   = "$esc[31m"
 $white = "$esc[37m"
 
-$ctxColor    = if ($ctxPct -lt 50) { $green } elseif ($ctxPct -lt 80) { $yel } else { $red }
+$barColor = if ($sessPct -lt 50) { $green } elseif ($sessPct -lt 80) { $yel } else { $red }
+$wkColor  = if ($wkPct  -lt 50)  { $green } elseif ($wkPct  -lt 80)  { $yel } else { $red }
 $effortColor = switch ($effortTag) {
     'think' { $mag   }
     'fast'  { $cyan  }
@@ -167,38 +198,18 @@ $effortColor = switch ($effortTag) {
     default { $white }
 }
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-function Format-Tokens([long]$n) {
-    if ($n -ge 1000000) { return "$([math]::Round($n/1e6,2))M" }
-    if ($n -ge 1000)    { return "$([math]::Round($n/1e3,1))k" }
-    return [string]$n
-}
-
 # ── Build output ──────────────────────────────────────────────────────────────
-$inv     = [System.Globalization.CultureInfo]::InvariantCulture
-$costStr = '$' + $costRaw.ToString('N3', $inv)
-
-$ctxStr  = Format-Tokens $ctxTokens
-$winStr  = Format-Tokens $ctxWindow
-$sessStr = Format-Tokens ($sumIn + $sumCacheR + $sumCacheW + $sumOut)
-$outStr  = Format-Tokens $sumOut
+$budgetStr = Format-Tokens $BarScale
+$sessStr   = Format-Tokens $sessionOut
+$weekStr   = Format-Tokens $weeklyOut
 
 # Segment 1: model + effort
 $seg1 = "$dim[$modelDisplay]$reset ${effortColor}[$effortTag]$reset"
 
-# Segment 2: context bar
-$seg2 = "ctx ${ctxColor}[$bar]$reset $ctxStr/$winStr (${ctxPct}%)"
+# Segment 2: this session's output tokens (the bar), scaled to the budget
+$seg2 = "out ${barColor}[$bar]$reset $sessStr/$budgetStr (${sessPct}%)"
 
-# Segment 3: session totals + cost
-$seg3 = "session ${cyan}$sessStr$reset (out $outStr) $dim|$reset ${mag}${costStr}$reset"
+# Segment 3: rolling-window output across every session — persists across terminals
+$seg3 = "wk ${wkColor}$weekStr/$budgetStr$reset (${wkPct}%)"
 
-# Segment 4: plan budget bar (skip for direct API)
-$seg4 = ''
-if ($planMonthly -gt 0) {
-    $planPct   = [math]::Min(999, [math]::Round(($costRaw / $planMonthly) * 100, 3))
-    $planColor = if ($planPct -lt 1.0) { $green } elseif ($planPct -lt 5.0) { $yel } else { $red }
-    $planLabel = switch ($Plan) { 'pro' { 'Pro' }; 'max5' { 'Max5' }; 'max20' { 'Max20' }; default { 'Plan' } }
-    $seg4 = "$dim|$reset $planColor${planLabel}:${planPct}%$reset"
-}
-
-"$seg1 $dim|$reset $seg2 $dim|$reset $seg3 $seg4"
+"$seg1 $dim|$reset $seg2 $dim|$reset $seg3"

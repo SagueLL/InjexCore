@@ -32,6 +32,9 @@ from src.intelligence.anomaly.run_anomaly import main as anomaly_main
 from src.intelligence.behaviour.run_behaviour import main as behaviour_main
 from src.intelligence.correlation.run_correlation import main as correlation_main
 from src.intelligence.drift.run_drift import main as drift_main
+from src.intelligence.human_decisions.run_human_decision_overlay import (
+    main as human_decision_main,
+)
 from src.intelligence.incidents.run_incidents import main as incidents_main
 from src.intelligence.pca.run_pca import main as pca_main
 from src.intelligence.reference.run_reference import main as reference_main
@@ -52,6 +55,7 @@ _COMPONENTS: dict[str, Callable[[list[str] | None], int]] = {
     "incidents": incidents_main,
     "reference": reference_main,
     "scoring-experiment": scoring_experiment_main,
+    "human-decision": human_decision_main,
 }
 _DEFAULT_COMPONENT = "behaviour"
 
