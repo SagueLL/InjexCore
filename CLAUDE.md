@@ -225,9 +225,9 @@ Project-local Claude Code tooling lives in [.claude/agents/](.claude/agents/) an
 
 - **Skills:** directory layout `.claude/skills/<name>/SKILL.md` with `name:` + `description:` frontmatter. Add `scripts/` / `references/` / `templates/` subdirs only when actually needed.
 - **Agents:** single file `.claude/agents/<name>.md` with `name:`, `description:`, `tools:` frontmatter, then the system prompt. Each agent includes a **`MODEL STRATEGY`** section defining its default model plus dynamic escalation/downgrade conditions (selection is per-invocation, not per-agent).
-- Opus is the default only for agents requiring deep reasoning, ambiguity handling, system-level orchestration, or high-risk synthesis (6 of 18). The rest default to Sonnet with escalation when complexity warrants it.
+- Opus is the default only for agents requiring deep reasoning, ambiguity handling, system-level orchestration, or high-risk synthesis (6 of 20). The rest default to Sonnet with escalation when complexity warrants it.
 
-### Agents (18)
+### Agents (20)
 
 | Domain | Agents |
 |---|---|
@@ -239,10 +239,11 @@ Project-local Claude Code tooling lives in [.claude/agents/](.claude/agents/) an
 | Anomaly & PdM | `anomaly-detection-agent`, `predictive-maintenance-agent` *(Opus)*, `plastics-industry-agent` *(Opus)* |
 | Security | `security-reviewer-agent` *(Opus)* |
 | Project stewardship | `day-closing-agent`, `repository-architecture-agent`, `master-version-agent` *(Opus)* |
+| Dashboard | `dashboard-data-contract-agent`, `dashboard-ui-agent` |
 
 Agents marked *(Opus)* default to `claude-opus-4-7`; the rest default to `claude-sonnet-4-6`. All can escalate or downgrade dynamically.
 
-### Skills (52)
+### Skills (60)
 
 | Domain | Count | Skills |
 |---|---|---|
@@ -261,6 +262,7 @@ Agents marked *(Opus)* default to `claude-opus-4-7`; the rest default to `claude
 | Day-closing & continuity | 4 | `generate-daily-summary`, `evaluate-git-readiness`, `review-project-memory`, `detect-project-drift` |
 | Repository architecture | 4 | `analyze-repository-structure`, `detect-organization-drift`, `recommend-repository-layout`, `identify-technical-debt-hotspots` |
 | Project state & master version | 4 | `generate-project-state-report`, `consolidate-project-knowledge`, `track-project-evolution`, `generate-master-version` |
+| Dashboard | 8 | `define-dashboard-data-contract`, `map-intelligence-outputs-to-ui`, `validate-dashboard-payloads`, `generate-dashboard-fixtures`, `design-dashboard-layout`, `select-dashboard-components`, `generate-dashboard-view`, `review-dashboard-usability` |
 
 Each `SKILL.md` carries its own trigger phrase in frontmatter — the harness surfaces the right one based on the user's request.
 

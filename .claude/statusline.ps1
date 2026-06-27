@@ -9,24 +9,25 @@ $ErrorActionPreference = 'SilentlyContinue'
 #   $WeeklyBudget  — the number treated as 100%. Claude does NOT store your real
 #                    plan limit in any local file (the /usage figure is fetched
 #                    live from Anthropic's servers), so this is a fixed reference
-#                    you control. 1,000,000 ≈ the "1M" figure; tweak freely.
+#                    you control. 10000,000 ≈ the "10M" figure aprox; tweak freely.
 #   $BarScale      — what the session bar's 100% equals. Defaults to the weekly
 #                    budget, so one session usually fills only a sliver. Lower it
 #                    (e.g. 200000) if you want the bar to move more per session.
 #   $WeekWindowDays— rolling window for the "wk" figure. Anthropic's exact weekly
 #                    reset isn't knowable locally, so a 7-day rolling window is
 #                    used as an honest approximation.
-$WeeklyBudget   = 1000000
-$BarScale       = $WeeklyBudget
+$WeeklyBudget   = 10000000
+$BarScale       = 1000000
 $WeekWindowDays = 7
 
 # Where every project's session transcripts live. The "wk" total is aggregated
 # across ALL of them (account-wide), which is why it survives closing a terminal.
 $ProjectsRoot   = Join-Path $env:USERPROFILE '.claude\projects'
 
-# Tiny cache so the account-wide weekly scan doesn't re-parse on every render.
+# Cache so the account-wide weekly scan stays cheap: a short TTL fast-path plus a
+# per-file sum (keyed by mtime+size) so only changed transcripts are re-parsed.
 $CachePath      = Join-Path $env:USERPROFILE '.claude\statusline_usage_cache.json'
-$CacheTtlSec    = 8
+$CacheTtlSec    = 15
 # ─────────────────────────────────────────────────────────────────────────────
 
 $raw = [Console]::In.ReadToEnd()
@@ -69,23 +70,20 @@ function Read-UsageLine {
     $sM = [regex]::Match($tail, '"speed":"([a-z]+)"')
     if ($sM.Success) { $speed = $sM.Groups[1].Value }
 
-    $model = ''
-    $mM = [regex]::Match($Line, '"model":"(claude[^"]+)"')
-    if ($mM.Success) { $model = $mM.Groups[1].Value }
-
     return @{
         Out          = [long]$oM.Groups[1].Value
         TimestampUtc = $tsUtc
         Speed        = $speed
-        Model        = $model
         HasThink     = ($Line.IndexOf('"type":"thinking"') -ge 0)
     }
 }
 
 function Format-Tokens {
+    # Always invariant (period decimal) so locale never turns 1.5M into "1,5M".
     param([long]$n)
-    if ($n -ge 1000000) { return ('{0}M' -f [math]::Round($n / 1e6, 2)) }
-    if ($n -ge 1000)    { return ('{0}k' -f [math]::Round($n / 1e3, 1)) }
+    $ic = [System.Globalization.CultureInfo]::InvariantCulture
+    if ($n -ge 1000000) { return ([math]::Round($n / 1e6, 2)).ToString($ic) + 'M' }
+    if ($n -ge 1000)    { return ([math]::Round($n / 1e3, 1)).ToString($ic) + 'k' }
     return [string]$n
 }
 
@@ -95,11 +93,74 @@ function New-Bar {
     return ('#' * $filled) + ('-' * ($cells - $filled))
 }
 
+function Measure-WeeklyOutput {
+    # Sums OUTPUT tokens across every project transcript whose lines fall inside
+    # the rolling window. Incremental: a file that is unchanged (same mtime+size)
+    # AND fully inside the window contributes its cached sum without re-reading,
+    # so steady-state only the active session file is actually parsed.
+    param([string]$ProjectsRoot, [datetime]$CutoffUtc, $CachedFiles)
+
+    $total    = 0L
+    $newFiles = @{}
+    if (-not (Test-Path -LiteralPath $ProjectsRoot)) {
+        return @{ Total = $total; Files = $newFiles }
+    }
+
+    $cutTicks = $CutoffUtc.Ticks
+    $files = Get-ChildItem -LiteralPath $ProjectsRoot -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
+             Where-Object { $_.LastWriteTimeUtc -ge $CutoffUtc }
+
+    foreach ($f in $files) {
+        $key        = $f.FullName
+        $mtimeTicks = $f.LastWriteTimeUtc.Ticks
+        $len        = [long]$f.Length
+
+        $entry = $null
+        if ($null -ne $CachedFiles -and $CachedFiles.PSObject.Properties[$key]) { $entry = $CachedFiles.$key }
+
+        if ($null -ne $entry -and [long]$entry.mtimeTicks -eq $mtimeTicks -and
+            [long]$entry.length -eq $len -and [long]$entry.minTsTicks -ge $cutTicks) {
+            # Unchanged and fully inside the window → reuse cached sum verbatim.
+            $total += [long]$entry.out
+            $newFiles[$key] = @{ mtimeTicks = $mtimeTicks; length = $len; out = [long]$entry.out
+                                 minTsTicks = [long]$entry.minTsTicks; maxTsTicks = [long]$entry.maxTsTicks }
+            continue
+        }
+
+        # New, changed, or straddling the cutoff → parse it.
+        $sumAll = 0L; $sumWin = 0L
+        $minTicks = [long]::MaxValue; $maxTicks = [long]::MinValue
+        try {
+            foreach ($line in [System.IO.File]::ReadLines($key)) {
+                if ($line.IndexOf('"usage":{') -lt 0) { continue }
+                $u = Read-UsageLine $line
+                if ($null -eq $u) { continue }
+                $sumAll += $u.Out
+                if ($null -ne $u.TimestampUtc) {
+                    $tt = $u.TimestampUtc.Ticks
+                    if ($tt -lt $minTicks) { $minTicks = $tt }
+                    if ($tt -gt $maxTicks) { $maxTicks = $tt }
+                    if ($tt -ge $cutTicks) { $sumWin += $u.Out }
+                } else {
+                    $sumWin += $u.Out   # no parseable timestamp: file is in-window by mtime, count it
+                }
+            }
+        } catch { }
+        if ($minTicks -eq [long]::MaxValue) { $minTicks = $cutTicks }
+        if ($maxTicks -eq [long]::MinValue) { $maxTicks = $mtimeTicks }
+
+        $total += $sumWin
+        $newFiles[$key] = @{ mtimeTicks = $mtimeTicks; length = $len; out = $sumAll
+                             minTsTicks = $minTicks; maxTsTicks = $maxTicks }
+    }
+
+    return @{ Total = $total; Files = $newFiles }
+}
+
 # ── Session output (the bar) — current transcript only, every render ───────────
 $sessionOut = 0L
 $lastSpeed  = ''
 $lastThink  = $false
-$lastModel  = $modelId
 
 if ($transcriptPath -and (Test-Path -LiteralPath $transcriptPath)) {
     try {
@@ -109,7 +170,6 @@ if ($transcriptPath -and (Test-Path -LiteralPath $transcriptPath)) {
             if ($null -eq $u) { continue }
             $sessionOut += $u.Out
             if ($u.Speed) { $lastSpeed = $u.Speed }
-            if ($u.Model) { $lastModel = $u.Model }
             $lastThink = $u.HasThink
         }
     } catch { }
@@ -118,46 +178,37 @@ if ($transcriptPath -and (Test-Path -LiteralPath $transcriptPath)) {
 # ── Weekly output (persistent) — all projects, rolling window, cached ──────────
 $nowUtc    = (Get-Date).ToUniversalTime()
 $cutoffUtc = $nowUtc.AddDays(-$WeekWindowDays)
-$weeklyOut = $null
 
+$cache = $null
 try {
     if (Test-Path -LiteralPath $CachePath) {
-        $c = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
-        $cachedAt = [datetime]::MinValue
-        if ([datetime]::TryParse([string]$c.computedAtUtc, $invariant, $utcStyles, [ref]$cachedAt)) {
-            $age = ($nowUtc - $cachedAt).TotalSeconds
-            if ($age -ge 0 -and $age -lt $CacheTtlSec -and [int]$c.windowDays -eq $WeekWindowDays) {
-                $weeklyOut = [long]$c.weeklyOut
-            }
-        }
+        $cache = Get-Content -LiteralPath $CachePath -Raw | ConvertFrom-Json
     }
 } catch { }
 
-if ($null -eq $weeklyOut) {
-    $weeklyOut = 0L
-    if (Test-Path -LiteralPath $ProjectsRoot) {
-        try {
-            $files = Get-ChildItem -LiteralPath $ProjectsRoot -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
-                     Where-Object { $_.LastWriteTimeUtc -ge $cutoffUtc }
-            foreach ($f in $files) {
-                try {
-                    foreach ($line in [System.IO.File]::ReadLines($f.FullName)) {
-                        if ($line.IndexOf('"usage":{') -lt 0) { continue }
-                        $u = Read-UsageLine $line
-                        if ($null -eq $u) { continue }
-                        if ($null -ne $u.TimestampUtc -and $u.TimestampUtc -lt $cutoffUtc) { continue }
-                        $weeklyOut += $u.Out
-                    }
-                } catch { }
-            }
-        } catch { }
+# Fast path: a fresh cache (within TTL, same window) is returned verbatim.
+$weeklyOut = $null
+if ($null -ne $cache) {
+    $cachedAt = [datetime]::MinValue
+    if ([int]$cache.windowDays -eq $WeekWindowDays -and
+        [datetime]::TryParse([string]$cache.computedAtUtc, $invariant, $utcStyles, [ref]$cachedAt)) {
+        $age = ($nowUtc - $cachedAt).TotalSeconds
+        if ($age -ge 0 -and $age -lt $CacheTtlSec) { $weeklyOut = [long]$cache.weeklyOut }
     }
+}
+
+# Slow path: re-aggregate, but reuse per-file sums for unchanged transcripts.
+if ($null -eq $weeklyOut) {
+    $cachedFiles = if ($null -ne $cache) { $cache.files } else { $null }
+    $res = Measure-WeeklyOutput -ProjectsRoot $ProjectsRoot -CutoffUtc $cutoffUtc -CachedFiles $cachedFiles
+    $weeklyOut = [long]$res.Total
     try {
         @{
             computedAtUtc = $nowUtc.ToString('o')
-            weeklyOut     = $weeklyOut
             windowDays    = $WeekWindowDays
-        } | ConvertTo-Json -Compress | Set-Content -LiteralPath $CachePath -Encoding UTF8
+            weeklyOut     = $weeklyOut
+            files         = $res.Files
+        } | ConvertTo-Json -Depth 6 -Compress | Set-Content -LiteralPath $CachePath -Encoding UTF8
     } catch { }
 }
 
@@ -199,17 +250,20 @@ $effortColor = switch ($effortTag) {
 }
 
 # ── Build output ──────────────────────────────────────────────────────────────
-$budgetStr = Format-Tokens $BarScale
-$sessStr   = Format-Tokens $sessionOut
-$weekStr   = Format-Tokens $weeklyOut
+$budgetStr  = Format-Tokens $BarScale
+$sessStr    = Format-Tokens $sessionOut
+$weekStr    = Format-Tokens $weeklyOut
+$sessPctStr = $sessPct.ToString($invariant)
+$wkPctStr   = $wkPct.ToString($invariant)
+$wkBudgetStr  = "10M"  # hard-coded for now, since the weekly budget is user-configurable and not fetched from Anthropic
 
 # Segment 1: model + effort
 $seg1 = "$dim[$modelDisplay]$reset ${effortColor}[$effortTag]$reset"
 
 # Segment 2: this session's output tokens (the bar), scaled to the budget
-$seg2 = "out ${barColor}[$bar]$reset $sessStr/$budgetStr (${sessPct}%)"
+$seg2 = "out ${barColor}[$bar]$reset $sessStr/$budgetStr (${sessPctStr}%)"
 
 # Segment 3: rolling-window output across every session — persists across terminals
-$seg3 = "wk ${wkColor}$weekStr/$budgetStr$reset (${wkPct}%)"
+$seg3 = "wk ${wkColor}$weekStr/$wkBudgetStr$reset (${wkPctStr}%)"
 
 "$seg1 $dim|$reset $seg2 $dim|$reset $seg3"
