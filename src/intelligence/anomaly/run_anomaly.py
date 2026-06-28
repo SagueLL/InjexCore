@@ -58,15 +58,22 @@ from src.intelligence._common.reporting import (
     write_json,
     write_markdown,
 )
-from src.intelligence._common.runs import LATEST, new_run_id, resolve_run, run_dir
+from src.intelligence._common.runs import (
+    LATEST,
+    create_run_dir,
+    new_run_id,
+    resolve_run,
+)
 from src.intelligence._common.upstream import (
     DEFAULT_BASELINES,
     DEFAULT_BEHAVIOUR_MANIFEST,
     DEFAULT_PROFILE_LABELS,
     align_labels,
+    behaviour_provenance,
     load_baselines,
     load_behaviour_manifest,
     load_profile_labels,
+    resolve_behaviour_dir,
 )
 from src.intelligence.anomaly import (
     combine,
@@ -230,6 +237,7 @@ def run(
 
     groups = load_groups(classification)
     behaviour_manifest = load_behaviour_manifest(behaviour_manifest_path)
+    behaviour_dir = resolve_behaviour_dir(labels_path)
     baselines = load_baselines(baselines_path)
     labels_frame = load_profile_labels(labels_path)
     labels, train_mask = align_labels(df, labels_frame)
@@ -405,7 +413,7 @@ def run(
             features=features,
             master_path=master_path,
             upstream={
-                "behaviour_fit_timestamp": behaviour_manifest.get("fit_timestamp"),
+                **behaviour_provenance(behaviour_dir, behaviour_manifest),
                 "behaviour_fit_window": behaviour_manifest.get("fit_window"),
                 "pca_run_id": pca_run_dir_path.name,
                 "pca_fingerprint_sha256": pca_fingerprint.get("sha256"),
@@ -523,7 +531,9 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
 
-    pca_run_dir_path = resolve_run(args.pca_root, args.pca_run, pca_io.MANIFEST_NAME)
+    pca_run_dir_path = resolve_run(
+        args.pca_root, args.pca_run, pca_io.MANIFEST_NAME, expected_component="pca"
+    )
     run_id = args.run_id or new_run_id(args.output_root)
     art = run(
         args.master,
@@ -544,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = run_dir(args.output_root, run_id)
+    out = create_run_dir(args.output_root, run_id)
     write_table(art.scored, out / io.SCORES_FILE)
     write_table(art.calibration, out / io.CALIBRATION_FILE)
     write_table(art.unsupported, out / io.UNSUPPORTED_FILE)

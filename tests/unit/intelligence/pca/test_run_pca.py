@@ -26,14 +26,25 @@ def chain_inputs(tmp_path: Path, labeled_frame) -> dict[str, Path]:
     master = tmp_path / "master_dataset.parquet"
     df.reset_index().to_parquet(master, index=False)
 
-    labels_path = tmp_path / "profile_labels.parquet"
+    # Run-versioned behaviour layout so the leaf manifest records a real
+    # behaviour_run_id (PROV-01).
+    beh_run = tmp_path / "behaviour" / "runs" / "beh1"
+    (beh_run / "profiles").mkdir(parents=True)
+    labels_path = beh_run / "profiles" / "profile_labels.parquet"
     pd.DataFrame(
         {"profile": labels, "is_train": train_mask.astype("int8")}
     ).reset_index().to_parquet(labels_path, index=False)
 
-    manifest_path = tmp_path / "behaviour_fit_manifest.json"
+    manifest_path = beh_run / "behaviour_fit_manifest.json"
     manifest_path.write_text(
-        json.dumps({"fit_timestamp": "t0", "fit_window": {"n_train": 30}}),
+        json.dumps(
+            {
+                "fit_timestamp": "t0",
+                "created_at": "c0",
+                "master_dataset_sha256": "beh-sha-1",
+                "fit_window": {"n_train": 30},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -91,6 +102,12 @@ def test_write_run_creates_versioned_artifacts(chain_inputs) -> None:
     assert manifest["component"] == "pca"
     assert manifest["profiles"]["profile_a"]["n_components"] >= 1
     assert "sklearn" in manifest["versions"]
+    up = manifest["upstream"]
+    assert up["behaviour_run_id"] == "beh1"
+    assert up["behaviour_manifest_path"].endswith("behaviour_fit_manifest.json")
+    assert up["behaviour_created_at"] == "c0"
+    assert up["behaviour_fit_timestamp"] == "t0"
+    assert up["behaviour_master_dataset_sha256"] == "beh-sha-1"
 
     meta = json.loads((mdir / io.MODEL_META_FILE).read_text(encoding="utf-8"))
     assert meta["profile"] == "profile_a"

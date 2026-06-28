@@ -16,6 +16,20 @@ from typing import Any
 import pandas as pd
 
 
+def file_sha256(path: Path) -> str:
+    """Streaming sha256 of a file's bytes (1 MiB chunks).
+
+    Complements :func:`dataset_fingerprint`: the structural fingerprint
+    identifies *content shape*, this identifies the *exact file* — used by
+    context/sensor-health manifests to record their immutable inputs.
+    """
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        while chunk := fh.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def dataset_fingerprint(
     df: pd.DataFrame, source_path: Path | None = None
 ) -> dict[str, Any]:

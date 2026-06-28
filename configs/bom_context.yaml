@@ -1,0 +1,55 @@
+# BOM Operational Context Layer policy.
+# Validated against src/context/bom/policy.py (StrictModel: unknown keys raise).
+# Context engineering only: this component never modifies the master dataset,
+# never refits Intelligence-Layer models, never changes thresholds.
+
+raw_input:
+  csv_path: "data/context/bom/raw/Dades 20241008 - BOM.csv" # relative to PROJECT_ROOT
+  encoding: utf-8-sig
+  delimiter: ","
+  decimal_comma: true # Porcentaje uses comma decimals ("37,86")
+  columns:
+    # Raw header -> normalized name. "Fecha Incio" is a real typo in the
+    # source file; it is mapped here so code never hardcodes it.
+    order_id: EQ56_ORDRE
+    start_timestamp: Fecha Incio
+    end_timestamp: Fecha Fin
+    product_code: Producto
+    product_name: Descripcion Producto
+    recipe_version: Version
+    recipe_description: Descripcion version
+    material_code: Materia prima
+    material_name: Descripcion materia prima
+    percentage: Porcentaje
+    dosing_point: Punto Dosificacion
+
+percentage:
+  expected_min: 99.0 # order total below -> has_percentage_warning
+  expected_max: 103.0 # order total above -> has_percentage_warning;
+  #   totals >100% may be valid industrial formulation rules — flagged for
+  #   domain interpretation, never normalized to 100%.
+  outlier_row_max: 100.0 # single component above -> Stage A outlier finding
+
+timeline:
+  master_path: "data/datasets/master/master_dataset.parquet"
+  expected_master_rows: 167331 # hard alignment gate; null disables (tests)
+  boundary: closed_open # an order is active for start <= t < end
+  gap_tolerance_seconds: 0.0 # gaps shorter than this count as contiguous
+
+signature:
+  percentage_format: ".6f" # stable numeric formatting inside the hash
+  hash_prefix_len: 16 # sha256 hex prefix length
+
+forensic_windows:
+  candidate_dates: ["2024-09-09", "2024-09-12", "2024-09-13", "2024-09-16", "2024-09-18"]
+  window_hours: 24 # +/- window around each candidate date (midnight)
+  focus_product_codes: ["114"] # CC-21
+  focus_material_codes: ["1222"] # HARINILLA DE MAIZ
+
+forensic_addendum:
+  enabled: true
+  anomaly_root: "data/intelligence/anomaly"
+  anomaly_run_id: "20260611T173316Z" # or "latest" (completed-run resolution)
+  forensic_root: "data/intelligence/forensics"
+  forensic_run_id: "20260612T101850Z" # or "latest"
+  output_root: "data/intelligence/forensics/bom_addenda"

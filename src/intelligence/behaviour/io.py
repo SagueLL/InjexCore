@@ -3,12 +3,12 @@
 Input: the schema-locked master dataset
 (``data/datasets/master/master_dataset.parquet``).
 
-Outputs (all under ``data/intelligence/behaviour/`` — git-ignored, like the
-rest of ``data/``). Grouped into one subfolder per artifact family, mirroring
-the ``data/datasets/{master,specialized}/`` convention; the component-level
-fit manifest and ``Finding`` report sit at the behaviour root::
+Outputs are **run-versioned** — every execution writes into a fresh
+``data/intelligence/behaviour/runs/<run_id>/`` directory and never overwrites
+an earlier run (see :mod:`src.intelligence._common.runs`). The fit manifest is
+written **last**: its presence marks the run as complete and resolvable::
 
-    data/intelligence/behaviour/
+    data/intelligence/behaviour/runs/<run_id>/
     ├── profiles/
     │   └── profile_labels.parquet         per-row regime label (+ material-change flag)
     ├── baselines/
@@ -17,10 +17,13 @@ fit manifest and ``Finding`` report sit at the behaviour root::
     │   ├── distribution.parquet           per-profile row counts / coverage
     │   ├── durations.parquet              per-profile contiguous-segment statistics
     │   └── transitions.parquet            profile->profile transition counts
-    ├── behaviour_fit_manifest.json        train-window bounds, production quantile
-    │                                      edges, sensor list, fit timestamp — the
-    │                                      reproducible fit contract for scoring
-    └── behaviour_intelligence_report.{json,md}   ``Finding`` report
+    ├── behaviour_intelligence_report.{json,md}   ``Finding`` report
+    └── behaviour_fit_manifest.json        written LAST — the reproducible fit
+                                           contract (train window, master sha,
+                                           sensor list) downstream consumes
+
+Downstream components resolve the latest *completed* behaviour run via
+:func:`src.intelligence._common.upstream.resolve_behaviour_run`.
 """
 
 from __future__ import annotations
@@ -32,24 +35,56 @@ from typing import Any
 import pandas as pd
 
 from src.config import DATASETS_DIR, INTELLIGENCE_DIR
+from src.intelligence._common.fingerprint import file_sha256
+from src.intelligence._common.runs import (
+    LATEST,
+    create_run_dir,
+    new_run_id,
+    resolve_run,
+    run_dir,
+)
+
+__all__ = [
+    "DEFAULT_MASTER_IN",
+    "BEHAVIOUR_DIR",
+    "COMPONENT",
+    "MANIFEST_NAME",
+    "PROFILE_LABELS_FILE",
+    "BASELINES_FILE",
+    "DISTRIBUTION_FILE",
+    "DURATIONS_FILE",
+    "TRANSITIONS_FILE",
+    "REPORT_JSON",
+    "REPORT_MD",
+    "LATEST",
+    "new_run_id",
+    "create_run_dir",
+    "run_dir",
+    "resolve_run",
+    "file_sha256",
+    "load_master",
+    "write_table",
+    "write_manifest",
+]
 
 # --- Input ----------------------------------------------------------------
 DEFAULT_MASTER_IN = DATASETS_DIR / "master" / "master_dataset.parquet"
 
-# --- Output root ----------------------------------------------------------
+# --- Output root + run-versioned layout -----------------------------------
 BEHAVIOUR_DIR = INTELLIGENCE_DIR / "behaviour"
+COMPONENT = "behaviour"
 
-# Artifacts — one subfolder per family (writers mkdir parents on write).
-DEFAULT_PROFILE_LABELS_OUT = BEHAVIOUR_DIR / "profiles" / "profile_labels.parquet"
-DEFAULT_BASELINES_OUT = BEHAVIOUR_DIR / "baselines" / "baselines.parquet"
-DEFAULT_DISTRIBUTION_OUT = BEHAVIOUR_DIR / "validation" / "distribution.parquet"
-DEFAULT_DURATIONS_OUT = BEHAVIOUR_DIR / "validation" / "durations.parquet"
-DEFAULT_TRANSITIONS_OUT = BEHAVIOUR_DIR / "validation" / "transitions.parquet"
+MANIFEST_NAME = "behaviour_fit_manifest.json"
 
-# Component-level summaries at the behaviour root (span all families).
-DEFAULT_FIT_MANIFEST_OUT = BEHAVIOUR_DIR / "behaviour_fit_manifest.json"
-DEFAULT_REPORT_JSON = BEHAVIOUR_DIR / "behaviour_intelligence_report.json"
-DEFAULT_REPORT_MD = BEHAVIOUR_DIR / "behaviour_intelligence_report.md"
+# Run-relative artifact paths (one subfolder per family, mirroring the
+# datasets-stage convention). Writers mkdir parents on write.
+PROFILE_LABELS_FILE = Path("profiles") / "profile_labels.parquet"
+BASELINES_FILE = Path("baselines") / "baselines.parquet"
+DISTRIBUTION_FILE = Path("validation") / "distribution.parquet"
+DURATIONS_FILE = Path("validation") / "durations.parquet"
+TRANSITIONS_FILE = Path("validation") / "transitions.parquet"
+REPORT_JSON = "behaviour_intelligence_report.json"
+REPORT_MD = "behaviour_intelligence_report.md"
 
 
 def load_master(path: Path = DEFAULT_MASTER_IN) -> pd.DataFrame:

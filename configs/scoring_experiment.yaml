@@ -1,0 +1,35 @@
+# Controlled Scoring Experiment policy — Iteration C Part 3.
+#
+# Runs interpretive, controlled scenarios over the persisted anomaly, drift
+# and incident outputs. It never refits a model, never recomputes
+# PCA/Mahalanobis from altered matrices and never overwrites an original
+# score. Every model below inherits StrictModel (extra="forbid").
+
+# Completed upstream runs consumed read-only (CLI flag > pin > "latest").
+# The reference run supplies the PENDING (unapproved) quarantine proposal.
+upstream:
+  anomaly_root: data/intelligence/anomaly
+  anomaly_run: latest
+  sensor_health_root: data/intelligence/sensor_health
+  sensor_health_run: latest
+  drift_root: data/intelligence/drift
+  drift_run: latest
+  incidents_root: data/intelligence/incidents
+  incidents_run: latest
+  operational_root: data/context/operational
+  operational_run: latest
+  reference_root: data/intelligence/reference
+  reference_run: latest
+
+# How many rows to surface in the human-facing "top remaining" summaries.
+reporting:
+  top_remaining: 10
+
+# Read-only decision-report forensic addendum (decision matrix, risk
+# assessment, required plant records, executive summary). Skippable per run
+# with --skip-decision-report.
+decision_report:
+  enabled: true
+  output_root: data/intelligence/forensics/reference_decision
+
+output_root: data/intelligence/scoring_experiments

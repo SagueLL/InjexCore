@@ -1,0 +1,53 @@
+# Operational Context Overlay policy.
+# Validated against src/context/operational/policy.py (StrictModel: unknown
+# keys raise). Context engineering only: never modifies master/BOM, never
+# refits models, never changes thresholds. Steam context is derived from
+# sensor data, independent of profile, and never from a single row.
+
+timeline:
+  master_path: "data/datasets/master/master_dataset.parquet"
+  expected_master_rows: 167331 # hard alignment gate; null disables (tests)
+
+upstream:
+  # Behaviour is run-versioned; leave these empty to resolve the latest
+  # completed behaviour run, or pin an explicit artifact path here.
+  profile_labels_path: ""
+  behaviour_manifest_path: ""
+  sensor_health_root: "data/intelligence/sensor_health"
+  sensor_health_run: latest # resolved id is pinned in the run manifest
+  bom_root: "data/context/bom"
+  bom_run: "20260612T124909Z" # pinned: reproducibility over convenience
+  anomaly_root: "data/intelligence/anomaly"
+  anomaly_run: "20260611T173316Z" # addendum only (read-only join)
+  forensic_root: "data/intelligence/forensics"
+  forensic_run: "20260612T101850Z" # addendum only
+
+steam:
+  pressure_sensor: steam_valve_pressure_me2
+  temp_sensor: conditioner_steam_loop_temp
+  auxiliary_sensors: [steam_valve_temp_me2] # evidence only, never decisive
+  pressure_active_threshold: 1.0 # bar; stopped median 0.18, running 2.5-2.9
+  temp_active_threshold: 60.0 # degC; stopped median 34.3, running 85-89
+  window_rows: 241 # centered persistence window (~plus/minus 2 h)
+  min_valid_rows: 30 # fewer valid indicator rows -> unknown
+  on_fraction: 0.9
+  off_fraction: 0.1
+
+context_key:
+  enabled: true # metadata only — never a model input
+  fields: [profile, steam_context, sensor_health_context, bom_context_status]
+
+transitions:
+  track_profile: true
+  track_steam: true
+  track_sensor_health: true
+  track_product: true
+  track_recipe: true
+  track_bom_overlap: true
+  track_bom_gap: true
+
+forensic_addendum:
+  enabled: true
+  output_root: "data/intelligence/forensics/context_addenda"
+  candidate_dates: ["2024-09-09", "2024-09-12", "2024-09-13", "2024-09-16", "2024-09-18"]
+  window_hours: 24

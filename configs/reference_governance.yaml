@@ -1,0 +1,38 @@
+# Reference Governance policy — Iteration C Part 3.
+#
+# Governs how the current reference, candidate references and quarantine
+# recommendations are tracked and proposed for human review. It never
+# approves a quarantine, excludes a sensor, refits a model or changes the
+# reference window. Every model below inherits StrictModel (extra="forbid"):
+# a misspelled key raises.
+
+# Completed upstream runs consumed read-only (CLI flag > pin > "latest").
+upstream:
+  sensor_health_root: data/intelligence/sensor_health
+  sensor_health_run: latest
+  incidents_root: data/intelligence/incidents
+  incidents_run: latest
+  drift_root: data/intelligence/drift
+  drift_run: latest
+  # Behaviour is run-versioned; reference_v1 is seeded from the latest
+  # completed behaviour run's self-reported provenance.
+  behaviour_root: data/intelligence/behaviour
+  behaviour_run: latest
+  master_path: data/datasets/master/master_dataset.parquet
+
+# Sensors eligible for a quarantine *proposal*. A proposal is only created
+# when upstream sensor-health evidence already recommends quarantine for the
+# sensor; this list narrows that set (empty == accept every recommended one).
+quarantine:
+  candidate_sensors:
+    - inlet_hopper_points
+
+# When residual healthy-only drift is "materially significant" enough to
+# recommend designing a Reference v2 *now*. Conservative on purpose: both
+# gates must pass. A candidate v2 is always proposed (pending_review) — these
+# thresholds only flip its recommended_next_step from "defer" to "design".
+candidate_v2:
+  residual_window_min: 50
+  residual_fraction_min: 0.05
+
+output_root: data/intelligence/reference

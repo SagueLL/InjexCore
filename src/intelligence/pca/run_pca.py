@@ -48,13 +48,15 @@ from src.intelligence._common.manifest import base_manifest
 from src.intelligence._common.persistence import runtime_versions, save_model
 from src.intelligence._common.policy import GLOBAL_PROFILE
 from src.intelligence._common.reporting import Finding, write_json, write_markdown
-from src.intelligence._common.runs import new_run_id, run_dir
+from src.intelligence._common.runs import create_run_dir, new_run_id
 from src.intelligence._common.upstream import (
     DEFAULT_BEHAVIOUR_MANIFEST,
     DEFAULT_PROFILE_LABELS,
     align_labels,
+    behaviour_provenance,
     load_behaviour_manifest,
     load_profile_labels,
+    resolve_behaviour_dir,
 )
 from src.intelligence.pca import io, model, scoring
 from src.intelligence.pca.model import PcaArtifact, ProfilePcaModel
@@ -100,13 +102,15 @@ def run(
 
     groups = load_groups(classification)
     behaviour_manifest = load_behaviour_manifest(behaviour_manifest_path)
+    behaviour_dir = resolve_behaviour_dir(labels_path)
     labels_frame = load_profile_labels(labels_path)
     labels, train_mask = align_labels(df, labels_frame)
     log.info(
-        "Behaviour contract: %d / %d train rows, %d profiles",
+        "Behaviour contract: %d / %d train rows, %d profiles (behaviour run %s)",
         int(train_mask.sum()),
         len(df),
         labels.nunique(),
+        behaviour_dir.name,
     )
 
     all_findings: list[Finding] = []
@@ -159,7 +163,7 @@ def run(
             features=art.features,
             master_path=master_path,
             upstream={
-                "behaviour_fit_timestamp": behaviour_manifest.get("fit_timestamp"),
+                **behaviour_provenance(behaviour_dir, behaviour_manifest),
                 "behaviour_fit_window": behaviour_manifest.get("fit_window"),
             },
         ),
@@ -255,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out = run_dir(args.output_root, run_id)
+    out = create_run_dir(args.output_root, run_id)
     for profile, m in art.pca.models.items():
         _write_profile_model(out, profile, m)
         write_table(art.scores[profile], io.scores_dir(out, profile) / io.SCORES_FILE)
