@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 
-export type DashboardStatus = "normal" | "warning" | "critical" | "unknown";
+import type { OperationalStatus } from "@/types/dashboard";
+
+export type DashboardStatus = OperationalStatus;
 
 const STATUS_CONFIG: Record<
   DashboardStatus,
