@@ -11,7 +11,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Executive Overview"
+        title="Executive Overview Dashboard v0"
         description="High-level operational summary of the analysed industrial period."
       />
 
@@ -28,7 +28,7 @@ export default function OverviewPage() {
           <div className="space-y-0.5">
             <dt className="text-xs text-muted-foreground">Analysed period</dt>
             <dd className="text-sm font-medium text-foreground">
-              {summary.periodStart} → {summary.periodEnd}
+              {summary.periodStart} to {summary.periodEnd}
             </dd>
           </div>
         </dl>
