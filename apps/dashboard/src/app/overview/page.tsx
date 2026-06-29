@@ -11,7 +11,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Executive Overview Dashboard v0"
+        title="Executive Overview v0"
         description="High-level operational summary of the analysed industrial period."
       />
 
