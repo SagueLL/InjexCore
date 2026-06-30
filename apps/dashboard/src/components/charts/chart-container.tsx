@@ -2,23 +2,26 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 
-interface SectionCardProps {
+interface ChartContainerProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  footer?: string;
   className?: string;
 }
 
-export function SectionCard({
+export function ChartContainer({
   title,
   description,
   children,
+  footer,
   className,
-}: SectionCardProps) {
+}: ChartContainerProps) {
   return (
     <Card className={className}>
       <CardHeader>
@@ -26,6 +29,11 @@ export function SectionCard({
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
       <CardContent>{children}</CardContent>
+      {footer ? (
+        <CardFooter className="border-t text-xs text-muted-foreground">
+          {footer}
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }
