@@ -27,6 +27,7 @@ const chartColors = {
   critical: "#dc2626",
   neutral: "#64748b",
   grid: "#e2e8f0",
+  incidents: "#003773",
 }
 
 export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
@@ -66,16 +67,16 @@ export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
             yAxisId="counts"
             dataKey="anomalyCount"
             name="Anomaly windows"
-            fill="var(--muted-foreground)"
-            fillOpacity={0.3}
+            fill={chartColors.incidents}
+            fillOpacity={0.4}
             radius={[2, 2, 0, 0]}
           />
           <Bar
             yAxisId="counts"
             dataKey="residualCount"
             name="Residual review"
-            fill="var(--primary)"
-            fillOpacity={0.35}
+            fill={chartColors.warning}
+            fillOpacity={0.4}
             radius={[2, 2, 0, 0]}
           />
           <Line
@@ -83,7 +84,7 @@ export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
             type="monotone"
             dataKey="anomalyScore"
             name="Anomaly score"
-            stroke="var(--primary)"
+            stroke={chartColors.green}
             strokeWidth={2}
             dot={{ r: 3 }}
             activeDot={{ r: 5 }}

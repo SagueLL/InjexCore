@@ -61,7 +61,7 @@ export function OperationalTimelineChart({
             dataKey="incidentCount"
             name="Incident windows"
             fill={chartColors.incidents}
-            fillOpacity={0.8}
+            fillOpacity={0.5}
             radius={[6, 6, 0, 0]}
           />
           <Line
