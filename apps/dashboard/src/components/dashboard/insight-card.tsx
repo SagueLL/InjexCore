@@ -15,7 +15,7 @@ interface InsightCardProps {
 
 export function InsightCard({ title, body, footer, className }: InsightCardProps) {
   return (
-    <Card className={className}>
+    <Card className="overflow-hidden border-border/80 bg-card shadow-sm transition-shadow hover:shadow-lg">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>

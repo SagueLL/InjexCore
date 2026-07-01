@@ -34,7 +34,7 @@ export default function OverviewPage() {
         </dl>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Operational status</span>
-          <StatusBadge status={summary.operationalStatus} />
+          <StatusBadge className="text-xs" status={summary.operationalStatus} />
         </div>
       </div>
 
