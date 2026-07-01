@@ -16,6 +16,17 @@ interface SensorHealthDistributionChartProps {
   data: SensorHealthDistributionItem[];
 }
 
+const chartColors = {
+  green: "var(--injex-green)",
+  greenBright: "var(--injex-green-bright)",
+  steel: "var(--injex-steel)",
+  navy: "var(--injex-navy)",
+  warning: "#d97706",
+  critical: "#dc2626",
+  neutral: "#64748b",
+  grid: "#e2e8f0",
+}
+
 export function SensorHealthDistributionChart({
   data,
 }: SensorHealthDistributionChartProps) {
