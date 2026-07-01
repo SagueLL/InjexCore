@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   ResponsiveContainer,
+  Cell,
   Tooltip,
   XAxis,
   YAxis,
@@ -16,15 +17,41 @@ interface SensorHealthDistributionChartProps {
   data: SensorHealthDistributionItem[];
 }
 
-const chartColors = {
-  green: "var(--injex-green)",
-  greenBright: "var(--injex-green-bright)",
-  steel: "var(--injex-steel)",
-  navy: "var(--injex-navy)",
-  warning: "#d97706",
-  critical: "#dc2626",
-  neutral: "#64748b",
-  grid: "#e2e8f0",
+type BarShapeProps = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: SensorHealthDistributionItem;
+};
+
+const statusColors: Record<SensorHealthDistributionItem["status"], string> = {
+  healthy: "var(--injex-green)",
+  warning: "#f6bc00",
+  critical: "#f62026",
+  unknown: "#3c3c3c",
+}
+
+function SensorHealthBarShape({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  payload,
+}: BarShapeProps) {
+  const fill = payload ? statusColors[payload.status] : "#64748b";
+
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      rx={6}
+      ry={6}
+      fill={fill}
+    />
+  );
 }
 
 export function SensorHealthDistributionChart({
@@ -51,12 +78,12 @@ export function SensorHealthDistributionChart({
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
-          <Tooltip />
+          <Tooltip cursor={{ fill: "rgba(17, 22, 32, 0.04)" }} />
           <Bar
             dataKey="count"
             name="Signals"
-            fill="var(--primary)"
             radius={[4, 4, 0, 0]}
+            shape={(props) => <SensorHealthBarShape {...props} />}
           />
         </BarChart>
       </ResponsiveContainer>
