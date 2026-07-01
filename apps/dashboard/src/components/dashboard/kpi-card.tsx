@@ -22,7 +22,7 @@ export function KpiCard({
   className,
 }: KpiCardProps) {
   return (
-    <Card className={className}>
+    <Card className="overflow-hidden border-border/80 bg-card shadow-sm transition-shadow hover:shadow-lg">
       <CardHeader>
         <CardTitle className="text-xs font-medium text-muted-foreground">
           {title}
