@@ -27,7 +27,16 @@ export function SidebarNav() {
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
             )}
           >
-            <HugeiconsIcon icon={item.icon} size={18} strokeWidth={2} />
+            <HugeiconsIcon 
+            icon={item.icon}
+            size={18}
+            strokeWidth={2}
+            className={cn(
+              "shrink-0 transition-colors",
+              isActive
+                ? "text-white" : "text-white/55 group-hover:text-white",
+            )}
+            />
             <span>{item.title}</span>
           </Link>
         );
