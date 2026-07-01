@@ -23,12 +23,14 @@ export function ChartContainer({
   className,
 }: ChartContainerProps) {
   return (
-    <Card className={className}>
+    <Card className="overflow-hidden border-border/80 bg-card shadow-sm">
       <CardHeader>
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
-        {description ? <CardDescription>{description}</CardDescription> : null}
+        {description ? <CardDescription className="text-sm leading-6 text-muted-foreground">{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent>
+        {children}
+      </CardContent>
       {footer ? (
         <CardFooter className="border-t text-xs text-muted-foreground">
           {footer}
