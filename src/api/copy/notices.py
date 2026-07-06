@@ -44,6 +44,11 @@ OVERVIEW_NOTICE_KEYS: tuple[NoticeKey, ...] = (
     "plant_records_required",
 )
 
+TIMELINE_NOTICE_KEYS: tuple[NoticeKey, ...] = (
+    "read_only",
+    "scores_unchanged",
+)
+
 
 def notices_for(keys: Sequence[NoticeKey]) -> list[Notice]:
     """Build notice objects for ``keys``, preserving the given order."""

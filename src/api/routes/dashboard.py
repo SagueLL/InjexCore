@@ -1,11 +1,12 @@
-"""Dashboard endpoints: run identity/lineage meta + the overview view.
+"""Dashboard endpoints: run identity/lineage meta + the view endpoints.
 
 ``/meta`` returns the approved canonical run identity plus the lineage-gate
 status evaluated once at startup (cached on app.state.dashboard_lineage by the
-lifespan). ``/overview`` is the first ``{meta, data}`` view endpoint and fails
-closed on invalid lineage. Neither reads artifacts per request; identity
-fields are static pins shared via ``src.api.services.view_meta`` (sourcing
-them from manifests is a later slice).
+lifespan). ``/overview`` and ``/timeline`` are ``{meta, data}`` view endpoints
+that fail closed on invalid lineage. No endpoint reads artifacts per request:
+``/meta`` and ``/overview`` serve static pins shared via
+``src.api.services.view_meta``, while ``/timeline`` reads the pinned run's
+artifacts once at first hit and caches the built response in-process.
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ from src.api.dependencies import require_valid_dashboard_lineage
 from src.api.schemas.common import Envelope
 from src.api.schemas.dashboard_meta import DashboardMeta
 from src.api.schemas.overview import DashboardSummary
+from src.api.schemas.timeline import OperationalTimeline
 from src.api.services.overview import build_overview_response
+from src.api.services.timeline import build_timeline_response
 from src.api.services.view_meta import (
     CONTRACT_VERSION,
     DATA_GENERATED_AT,
@@ -63,3 +66,23 @@ async def get_dashboard_meta(request: Request) -> DashboardMeta:
 )
 async def get_dashboard_overview() -> Envelope[DashboardSummary]:
     return build_overview_response()
+
+
+@router.get(
+    "/timeline",
+    summary="Operational timeline (enveloped)",
+    description=(
+        "Returns the {meta, data} envelope for the Operational Timeline view, "
+        "computed from the pinned run's persisted anomaly scores, incidents "
+        "and drift events (read once at first hit, then cached in-process). "
+        "Fails closed with 503 LINEAGE_INVALID when the startup lineage gate "
+        "is missing or invalid, and 503 ARTIFACT_UNREADABLE when a pinned "
+        "artifact cannot be read."
+    ),
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_valid_dashboard_lineage)],
+)
+def get_dashboard_timeline() -> Envelope[OperationalTimeline]:
+    # Sync handler on purpose: the first-hit parquet read runs in FastAPI's
+    # threadpool instead of blocking the event loop.
+    return build_timeline_response()
