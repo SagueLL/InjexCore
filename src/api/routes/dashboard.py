@@ -1,26 +1,30 @@
-"""Dashboard meta endpoint: run identity + lineage gate.
+"""Dashboard endpoints: run identity/lineage meta + the overview view.
 
-Returns the approved canonical run identity plus the lineage-gate status
-evaluated once at startup (cached on app.state.dashboard_lineage by the
-lifespan). Reads no artifacts per request; the identity fields below are still
-static pins (sourcing them from manifests is a later slice).
+``/meta`` returns the approved canonical run identity plus the lineage-gate
+status evaluated once at startup (cached on app.state.dashboard_lineage by the
+lifespan). ``/overview`` is the first ``{meta, data}`` view endpoint and fails
+closed on invalid lineage. Neither reads artifacts per request; identity
+fields are static pins shared via ``src.api.services.view_meta`` (sourcing
+them from manifests is a later slice).
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
+from src.api.dependencies import require_valid_dashboard_lineage
+from src.api.schemas.common import Envelope
 from src.api.schemas.dashboard_meta import DashboardMeta
+from src.api.schemas.overview import DashboardSummary
+from src.api.services.overview import build_overview_response
+from src.api.services.view_meta import (
+    CONTRACT_VERSION,
+    DATA_GENERATED_AT,
+    TRAIN_WINDOW_END,
+)
 from src.dashboard.contract import CANONICAL_BOM_RUN_ID, CANONICAL_RUN_ID
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
-# Static pins. contractVersion is a literal; dataGeneratedAt and trainWindowEnd
-# are pinned to the canonical run and will be sourced from the run manifest /
-# behaviour fit-window in a later slice (no artifact reads in this endpoint).
-CONTRACT_VERSION = "1.0"
-DATA_GENERATED_AT = "2026-06-16T10:25:58Z"
-TRAIN_WINDOW_END = "2024-09-03"
 
 
 @router.get(
@@ -30,7 +34,7 @@ TRAIN_WINDOW_END = "2024-09-03"
         "Returns the approved canonical run identity, train-window boundary, and "
         "the lineage-gate status evaluated once at startup. Returns 200 even when "
         "lineage severity is 'warning' or 'invalid' (it is the gate banner "
-        "source); data endpoints fail closed on 'invalid' in a later slice."
+        "source); data endpoints fail closed on 'invalid'."
     ),
 )
 async def get_dashboard_meta(request: Request) -> DashboardMeta:
@@ -43,3 +47,19 @@ async def get_dashboard_meta(request: Request) -> DashboardMeta:
         lineage=request.app.state.dashboard_lineage,
         required_warnings=[],
     )
+
+
+@router.get(
+    "/overview",
+    summary="Executive overview summary (enveloped)",
+    description=(
+        "Returns the {meta, data} envelope for the Executive Overview view. "
+        "Fails closed with 503 LINEAGE_INVALID when the startup lineage gate is "
+        "missing or invalid; 'ok'/'warning' severities pass. Serves stable "
+        "canonical-run values; no artifact reads per request."
+    ),
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_valid_dashboard_lineage)],
+)
+async def get_dashboard_overview() -> Envelope[DashboardSummary]:
+    return build_overview_response()
