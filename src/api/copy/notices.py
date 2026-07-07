@@ -51,6 +51,12 @@ TIMELINE_NOTICE_KEYS: tuple[NoticeKey, ...] = (
 
 SENSOR_HEALTH_NOTICE_KEYS: tuple[NoticeKey, ...] = ("quarantine_pending",)
 
+DRIFT_ANOMALY_NOTICE_KEYS: tuple[NoticeKey, ...] = (
+    "healthy_only_proxy",
+    "scores_unchanged",
+    "adjusted_interpretive",
+)
+
 INCIDENTS_NOTICE_KEYS: tuple[NoticeKey, ...] = (
     "relationships_associative",
     "quarantine_pending",
