@@ -4,7 +4,7 @@ import { ChartContainer } from "@/components/charts/chart-container";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { demoDriftAnomalySummary } from "@/lib/dashboard/demo-drift-anomaly";
+import { getDriftAnomalyData } from "@/lib/dashboard/data-access";
 
 import type { ContributionLevel } from "@/types/drift-anomaly";
 
@@ -16,8 +16,8 @@ function formatCount(value: number): string {
   return value.toLocaleString("en-US");
 }
 
-export default function DriftAnomalyPage() {
-  const driftAnomaly = demoDriftAnomalySummary;
+export default async function DriftAnomalyPage() {
+  const driftAnomaly = await getDriftAnomalyData();
 
   return (
     <div className="space-y-6">

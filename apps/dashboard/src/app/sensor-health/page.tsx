@@ -4,7 +4,7 @@ import { SensorHealthDistributionChart } from "@/components/charts/sensor-health
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { demoSensorHealthSummary } from "@/lib/dashboard/demo-sensor-health";
+import { getSensorHealthData } from "@/lib/dashboard/data-access";
 
 import type { OperationalStatus } from "@/types/dashboard";
 import type { SensorHealthStatus } from "@/types/sensor-health";
@@ -19,8 +19,8 @@ function humanizeIssueType(issueType: string): string {
   return issueType.replace(/_/g, " ");
 }
 
-export default function SensorHealthPage() {
-  const sensorHealth = demoSensorHealthSummary;
+export default async function SensorHealthPage() {
+  const sensorHealth = await getSensorHealthData();
 
   return (
     <div className="space-y-6">
