@@ -49,6 +49,14 @@ TIMELINE_NOTICE_KEYS: tuple[NoticeKey, ...] = (
     "scores_unchanged",
 )
 
+SENSOR_HEALTH_NOTICE_KEYS: tuple[NoticeKey, ...] = ("quarantine_pending",)
+
+INCIDENTS_NOTICE_KEYS: tuple[NoticeKey, ...] = (
+    "relationships_associative",
+    "quarantine_pending",
+    "adjusted_interpretive",
+)
+
 
 def notices_for(keys: Sequence[NoticeKey]) -> list[Notice]:
     """Build notice objects for ``keys``, preserving the given order."""
