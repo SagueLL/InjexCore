@@ -3,10 +3,10 @@ import { InsightCard } from "@/components/dashboard/insight-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { demoOverviewSummary } from "@/lib/dashboard/demo-overview";
+import { getOverviewData } from "@/lib/dashboard/data-access";
 
-export default function OverviewPage() {
-  const summary = demoOverviewSummary;
+export default async function OverviewPage() {
+  const summary = await getOverviewData();
 
   return (
     <div className="space-y-6">
