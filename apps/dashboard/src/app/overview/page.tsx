@@ -1,12 +1,14 @@
 import { PageHeader } from "@/components/app/page-header";
 import { InsightCard } from "@/components/dashboard/insight-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { NoticeStrip } from "@/components/dashboard/notice-strip";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { getOverviewData } from "@/lib/dashboard/data-access";
+import { TrustBanner } from "@/components/dashboard/trust-banner";
+import { getOverviewPayload } from "@/lib/dashboard/data-access";
 
 export default async function OverviewPage() {
-  const summary = await getOverviewData();
+  const { meta, data: summary } = await getOverviewPayload();
 
   return (
     <div className="space-y-6">
@@ -14,6 +16,10 @@ export default async function OverviewPage() {
         title="Executive Overview"
         description="High-level operational summary of the analysed industrial period."
       />
+
+      <NoticeStrip notices={meta.notices} />
+
+      <TrustBanner />
 
       <div className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
         <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-3">

@@ -14,10 +14,18 @@ from src.dashboard.contract import CANONICAL_BOM_RUN_ID, CANONICAL_RUN_ID
 
 # Static pins. contractVersion is a literal; dataGeneratedAt and trainWindowEnd
 # are pinned to the canonical run.
-# TODO(debt): source dataGeneratedAt / trainWindowEnd from the run manifest /
-# behaviour fit-window in the artifact-reader slice (no artifact reads yet).
-CONTRACT_VERSION = "1.0"
-DATA_GENERATED_AT = "2026-06-16T10:25:58Z"
+#
+# dataGeneratedAt is the LATEST completion timestamp across the pinned 11-component
+# chain (scoring_experiment, 2026-06-16T14:51:48Z) — i.e. when the served data
+# finished being generated. It is deliberately neither the run-id mint time
+# (10:25:58Z, which the run id already carries) nor the behaviour fit time
+# (10:26:24Z): behaviour completes *first*, and every artifact this API actually
+# serves — sensor health, drift, incidents, scoring experiment — was written
+# 4h25m later.
+# TODO(debt): derive at startup instead of pinning. Blocked on a per-component key
+# map: manifests record completion under `created_at` OR `fit_timestamp`.
+CONTRACT_VERSION = "1.1"
+DATA_GENERATED_AT = "2026-06-16T14:51:48Z"
 TRAIN_WINDOW_END = "2024-09-03"
 
 

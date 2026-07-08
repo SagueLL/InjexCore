@@ -36,6 +36,19 @@ NOTICE_TEXT: dict[NoticeKey, str] = {
     ),
 }
 
+# The full §5.4 set served by /dashboard/meta.requiredWarnings, in the order the
+# data contract lists them. Spelled out rather than derived from NOTICE_TEXT: the
+# wire order is contract surface and must not depend on dict insertion order.
+REQUIRED_WARNING_KEYS: tuple[NoticeKey, ...] = (
+    "read_only",
+    "scores_unchanged",
+    "adjusted_interpretive",
+    "quarantine_pending",
+    "healthy_only_proxy",
+    "relationships_associative",
+    "plant_records_required",
+)
+
 # Per-view notice sets in contract §2 table order (response order is part of
 # the contract surface, so views pass these tuples, never the registry dict).
 OVERVIEW_NOTICE_KEYS: tuple[NoticeKey, ...] = (
@@ -67,3 +80,12 @@ INCIDENTS_NOTICE_KEYS: tuple[NoticeKey, ...] = (
 def notices_for(keys: Sequence[NoticeKey]) -> list[Notice]:
     """Build notice objects for ``keys``, preserving the given order."""
     return [Notice(key=key, text=NOTICE_TEXT[key]) for key in keys]
+
+
+def required_warnings() -> list[str]:
+    """The full §5.4 required-warning copy, in contract order.
+
+    Served by ``/dashboard/meta`` so a consumer can audit that every warning it is
+    obliged to surface is accounted for, independent of any single view's subset.
+    """
+    return [NOTICE_TEXT[key] for key in REQUIRED_WARNING_KEYS]

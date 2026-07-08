@@ -193,10 +193,10 @@ def test_incidents_meta_matches_contract(
     monkeypatch: pytest.MonkeyPatch, synthetic_artifacts: None
 ) -> None:
     meta = _get_incidents(monkeypatch).json()["meta"]
-    assert meta["contractVersion"] == "1.0"
+    assert meta["contractVersion"] == "1.1"
     assert meta["runId"] == "remat-v1-20260616T102558Z"
     assert meta["bomRunId"] == "20260612T124909Z"
-    assert meta["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert meta["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     # Exact equality locks keys, copy and order (notice presence is contract).
     assert meta["notices"] == _EXPECTED_NOTICES
 
@@ -398,6 +398,15 @@ def test_incidents_real_artifacts_serve_all_88(
     data = resp.json()["data"]
     records = data["incidents"]
     assert len(records) == 88
+    # KNOWN UPSTREAM DEFECT (before-pilot): the canonical run's incident ids are
+    # not unique. INC-process_drift-20240925T000000Z-8743 names two genuinely
+    # different incidents (warning/conditioner_steam_loop_temp and
+    # anomaly/granulator_power), so _pack_rank and actions_by_incident silently
+    # share one rank and one action set across both. Pinned here so the fix in
+    # src/intelligence/incidents/ (id generation) is forced to update this
+    # assertion rather than land unnoticed. Do not "fix" this by deduplicating
+    # at the API — that would hide a real data-integrity defect.
+    assert len({r["id"] for r in records}) == 87
     assert [row["count"] for row in data["severityDistribution"]] == [3, 48, 27, 10]
     statuses = {r["status"] for r in records}
     assert "closed" not in statuses

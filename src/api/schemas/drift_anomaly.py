@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import Field
+
 from src.api.schemas import CamelModel
 
 DriftAnomalySeverity = Literal["normal", "warning", "critical"]
@@ -37,10 +39,15 @@ class DriftAnomalyKpi(CamelModel):
 
 
 class AnomalyEvidencePoint(CamelModel):
-    """One UTC day of anomaly evidence (days without scored rows are omitted)."""
+    """One UTC day of anomaly evidence (days without scored rows are omitted).
+
+    ``evidence_share`` is the fraction of the day's scored rows carrying warning or
+    anomaly evidence — a rate in [0, 1], not a model score. ``anomaly_count`` is the
+    same population as an absolute row count.
+    """
 
     date: str
-    anomaly_score: float
+    evidence_share: float = Field(ge=0.0, le=1.0)
     anomaly_count: int
     residual_count: int
     severity: DriftAnomalySeverity

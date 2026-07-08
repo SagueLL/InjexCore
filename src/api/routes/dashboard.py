@@ -1,20 +1,22 @@
 """Dashboard endpoints: run identity/lineage meta + the view endpoints.
 
-``/meta`` returns the approved canonical run identity plus the lineage-gate
-status evaluated once at startup (cached on app.state.dashboard_lineage by the
-lifespan). ``/overview``, ``/timeline``, ``/sensor-health``,
-``/drift-anomaly`` and ``/incidents`` are ``{meta, data}`` view endpoints that
-fail closed on invalid lineage. No endpoint reads artifacts per request:
-``/meta`` and ``/overview`` serve static pins shared via
-``src.api.services.view_meta``, while ``/timeline``, ``/sensor-health``,
-``/drift-anomaly`` and ``/incidents`` read the pinned run's artifacts once at
-first hit and cache the built response in-process.
+``/meta`` returns the approved canonical run identity, the full §5.4 required
+warning set, and the lineage-gate status evaluated once at startup (cached on
+app.state.dashboard_lineage by the lifespan). ``/overview``, ``/timeline``,
+``/sensor-health``, ``/drift-anomaly`` and ``/incidents`` are ``{meta, data}``
+view endpoints that fail closed on invalid lineage. No endpoint reads artifacts
+per request: ``/meta`` serves static pins shared via
+``src.api.services.view_meta``, while the five view endpoints read the pinned
+run's artifacts once at first hit and cache the built response in-process
+(``/overview`` reads through the sensor-health builder's cache for its derived
+"Problematic sensors" KPI).
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
+from src.api.copy.notices import required_warnings
 from src.api.dependencies import require_valid_dashboard_lineage
 from src.api.schemas.common import Envelope
 from src.api.schemas.dashboard_meta import DashboardMeta
@@ -42,10 +44,12 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
     "/meta",
     summary="Dashboard run identity and lineage gate",
     description=(
-        "Returns the approved canonical run identity, train-window boundary, and "
-        "the lineage-gate status evaluated once at startup. Returns 200 even when "
-        "lineage severity is 'warning' or 'invalid' (it is the gate banner "
-        "source); data endpoints fail closed on 'invalid'."
+        "Returns the approved canonical run identity, train-window boundary, the "
+        "full required-warning set (data contract §5.4), and the lineage-gate "
+        "status evaluated once at startup. Lineage warnings are path-redacted: "
+        "run folders, parquet paths and deployment internals are never exposed. "
+        "Returns 200 even when lineage severity is 'warning' or 'invalid' (it is "
+        "the gate banner source); data endpoints fail closed on 'invalid'."
     ),
 )
 async def get_dashboard_meta(request: Request) -> DashboardMeta:
@@ -56,7 +60,7 @@ async def get_dashboard_meta(request: Request) -> DashboardMeta:
         data_generated_at=DATA_GENERATED_AT,
         train_window_end=TRAIN_WINDOW_END,
         lineage=request.app.state.dashboard_lineage,
-        required_warnings=[],
+        required_warnings=required_warnings(),
     )
 
 
@@ -64,15 +68,20 @@ async def get_dashboard_meta(request: Request) -> DashboardMeta:
     "/overview",
     summary="Executive overview summary (enveloped)",
     description=(
-        "Returns the {meta, data} envelope for the Executive Overview view. "
-        "Fails closed with 503 LINEAGE_INVALID when the startup lineage gate is "
-        "missing or invalid; 'ok'/'warning' severities pass. Serves stable "
-        "canonical-run values; no artifact reads per request."
+        "Returns the {meta, data} envelope for the Executive Overview view. Serves "
+        "stable canonical-run values, except the 'Problematic sensors' KPI, which "
+        "is derived from the pinned run's sensor-health summary through that "
+        "view's cache so the two views can never disagree. Fails closed with 503 "
+        "LINEAGE_INVALID when the startup lineage gate is missing or invalid "
+        "('ok'/'warning' severities pass), and 503 ARTIFACT_UNREADABLE when the "
+        "pinned sensor-health artifacts cannot be read."
     ),
     response_model_exclude_none=True,
     dependencies=[Depends(require_valid_dashboard_lineage)],
 )
-async def get_dashboard_overview() -> Envelope[DashboardSummary]:
+def get_dashboard_overview() -> Envelope[DashboardSummary]:
+    # Sync handler on purpose: the first-hit parquet read (via the sensor-health
+    # builder) runs in FastAPI's threadpool instead of blocking the event loop.
     return build_overview_response()
 
 

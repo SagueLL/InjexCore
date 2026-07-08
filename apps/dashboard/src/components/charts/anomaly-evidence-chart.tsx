@@ -30,6 +30,15 @@ const chartColors = {
   incidents: "#003773",
 }
 
+const PERCENT = new Intl.NumberFormat("en-US", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+function formatEvidenceShare(value: number): string {
+  return PERCENT.format(value);
+}
+
 export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
   if (data.length === 0) {
     return (
@@ -48,9 +57,9 @@ export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="date" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
           <YAxis
-            yAxisId="score"
+            yAxisId="share"
             domain={[0, 1]}
-            tickFormatter={(value) => Number(value).toFixed(1)}
+            tickFormatter={formatEvidenceShare}
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
@@ -61,12 +70,19 @@ export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
-          <Tooltip />
+          <Tooltip
+            formatter={(value, name) =>
+              name === "Non-normal evidence share"
+                ? formatEvidenceShare(Number(value))
+                : value
+            }
+          />
           <Legend />
+          {/* anomalyCount is non-normal scored *rows* per day, not windows. */}
           <Bar
             yAxisId="counts"
             dataKey="anomalyCount"
-            name="Anomaly windows"
+            name="Anomaly rows"
             fill={chartColors.incidents}
             fillOpacity={0.4}
             radius={[2, 2, 0, 0]}
@@ -74,16 +90,16 @@ export function AnomalyEvidenceChart({ data }: AnomalyEvidenceChartProps) {
           <Bar
             yAxisId="counts"
             dataKey="residualCount"
-            name="Residual review"
+            name="Residual review rows"
             fill={chartColors.warning}
             fillOpacity={0.4}
             radius={[2, 2, 0, 0]}
           />
           <Line
-            yAxisId="score"
+            yAxisId="share"
             type="monotone"
-            dataKey="anomalyScore"
-            name="Anomaly score"
+            dataKey="evidenceShare"
+            name="Non-normal evidence share"
             stroke={chartColors.green}
             strokeWidth={2}
             dot={{ r: 3 }}

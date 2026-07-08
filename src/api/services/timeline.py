@@ -26,7 +26,12 @@ from src.api.schemas.timeline import (
     TimelineStatus,
     TimelineSummaryKpi,
 )
-from src.api.services._series import daily_p95, day_statuses, overlaps
+from src.api.services._series import (
+    daily_evidence,
+    day_statuses,
+    episodic_incidents,
+    overlaps,
+)
 from src.api.services.view_meta import TRAIN_WINDOW_END, build_view_meta
 from src.dashboard.contract import CANONICAL_RUN_ID
 from src.intelligence._common.runs import resolve_run
@@ -47,7 +52,9 @@ _QUARANTINE_ONSET = "2024-09-17"
 _ASSET_NAME = "Pelletizer line"
 _DATASET_NAME = "Real industrial dataset"
 
-_SCORE_COLUMNS = ["timestamp", "combined_score", "severity"]
+# combined_score is deliberately absent: no served field derives from it any more
+# (the daily p95 it fed was saturated — see services/_series.py).
+_SCORE_COLUMNS = ["timestamp", "severity"]
 
 # §6 day-status ladder precedence, strongest first.
 _STATUS_PRECEDENCE: tuple[TimelineStatus, ...] = (
@@ -65,8 +72,12 @@ _STATUS_TO_EVENT_SEVERITY: dict[str, TimelineSeverity] = {
 }
 
 
-def _load_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Read (scores, unsuppressed incidents, drift events) from the pinned run."""
+def _load_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Read (scores, unsuppressed incidents, episodic incidents, drift events).
+
+    ``episodic`` drops the recurring-pattern envelopes; both frames are returned so
+    the KPI can disclose how many were excluded from the daily series.
+    """
     try:
         anomaly_run = resolve_run(
             anomaly_io.ANOMALY_DIR,
@@ -89,38 +100,54 @@ def _load_artifacts() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         incidents = pd.read_parquet(incidents_run / incidents_io.INCIDENTS_FILE)
         suppressed = pd.read_parquet(incidents_run / incidents_io.SUPPRESSED_FILE)
         drift_events = pd.read_parquet(drift_run / drift_io.EVENTS_FILE)
+        # Filter suppression here so no consumer ever sees suppressed incidents.
+        unsuppressed = incidents[
+            ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
+        ].reset_index(drop=True)
+        # Inside the try: a missing `evidence` column is a schema change, and must
+        # fail closed rather than silently disable the recurring-pattern filter.
+        episodic = episodic_incidents(unsuppressed)
     except (OSError, ValueError, KeyError) as exc:
         # Argument-less on purpose: resolve_run/pyarrow messages embed
         # filesystem paths the API must never expose.
         raise ArtifactUnreadableError() from exc
-    # Filter suppression here so no consumer ever sees suppressed incidents.
-    unsuppressed = incidents[
-        ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
-    ].reset_index(drop=True)
-    return scores, unsuppressed, drift_events
+    return scores, unsuppressed, episodic, drift_events
 
 
 def _build_series(
-    p95: pd.Series, incident_counts: list[int], statuses: list[str]
+    evidence_share: pd.Series, incident_counts: list[int], statuses: list[str]
 ) -> list[TimelinePoint]:
     return [
         TimelinePoint(
             date=day.strftime("%Y-%m-%d"),
-            deviation_score=float(score),
+            evidence_share=float(share),
             incident_count=int(count),
             status=status,
         )
-        for (day, score), count, status in zip(
-            p95.items(), incident_counts, statuses, strict=True
+        for (day, share), count, status in zip(
+            evidence_share.items(), incident_counts, statuses, strict=True
         )
     ]
 
 
 def _summary_kpis(
-    series: list[TimelinePoint], incidents: pd.DataFrame, drift_events: pd.DataFrame
+    series: list[TimelinePoint],
+    incidents: pd.DataFrame,
+    episodic: pd.DataFrame,
+    drift_events: pd.DataFrame,
 ) -> list[TimelineSummaryKpi]:
     sustained = int(drift_events["status"].isin(["active", "persistent"]).sum())
     critical_days = sum(1 for point in series if point.status == "critical")
+    n_recurring = int(len(incidents) - len(episodic))
+    # The total stays len(incidents) so it agrees with /incidents and /overview;
+    # the exclusion from the daily series is disclosed rather than hidden.
+    recurring_note = (
+        f" {n_recurring} recurring-pattern episode(s) span most of the period and "
+        "are excluded from the daily series and day statuses; they remain in this "
+        "total and in the Incidents view."
+        if n_recurring
+        else ""
+    )
     return [
         TimelineSummaryKpi(
             label="Analysed days",
@@ -130,7 +157,9 @@ def _summary_kpis(
         TimelineSummaryKpi(
             label="Incident windows",
             value=int(len(incidents)),
-            description="Aggregated incidents overlapping the analysed period.",
+            description=(
+                "Aggregated incidents overlapping the analysed period." + recurring_note
+            ),
         ),
         TimelineSummaryKpi(
             label="Sustained drift events",
@@ -181,16 +210,17 @@ def _build_events(series: list[TimelinePoint]) -> list[TimelineEvent]:
     ]
     if series:
         # max() returns the first point at the maximum — deterministic tie-break.
-        peak = max(series, key=lambda point: point.deviation_score)
+        # On a fault-dominated run many days sit at 1.0, so "first" is the onset.
+        peak = max(series, key=lambda point: point.evidence_share)
         events.append(
             TimelineEvent(
                 date=peak.date,
                 type="incident",
                 severity=_STATUS_TO_EVENT_SEVERITY[peak.status],
-                title="Peak deviation evidence",
+                title="Peak daily evidence share",
                 description=(
-                    "Highest daily deviation score of the analysed period "
-                    f"({peak.deviation_score})."
+                    "First day at the highest share of scored rows carrying "
+                    f"warning or anomaly evidence ({peak.evidence_share})."
                 ),
             )
         )
@@ -250,19 +280,25 @@ def _build_periods(series: list[TimelinePoint]) -> list[TimelinePeriod]:
 
 
 def _build_timeline(
-    scores: pd.DataFrame, incidents: pd.DataFrame, drift_events: pd.DataFrame
+    scores: pd.DataFrame,
+    incidents: pd.DataFrame,
+    episodic: pd.DataFrame,
+    drift_events: pd.DataFrame,
 ) -> OperationalTimeline:
-    p95 = daily_p95(scores)
-    days = pd.DatetimeIndex(p95.index)
-    incident_counts = overlaps(days, incidents).sum(axis=1).tolist()
-    statuses = day_statuses(days, p95, incidents, drift_events)
-    series = _build_series(p95, incident_counts, statuses)
+    evidence = daily_evidence(scores)
+    share = evidence["evidence_share"]
+    days = pd.DatetimeIndex(evidence.index)
+    # Episodic-only, matching the day ladder: a recurring envelope would otherwise
+    # put a constant floor under every bar in the chart.
+    incident_counts = overlaps(days, episodic).sum(axis=1).tolist()
+    statuses = day_statuses(days, share, episodic, drift_events)
+    series = _build_series(share, incident_counts, statuses)
     return OperationalTimeline(
         asset_name=_ASSET_NAME,
         dataset_name=_DATASET_NAME,
         period_start=_PERIOD_START,
         period_end=_PERIOD_END,
-        summary_kpis=_summary_kpis(series, incidents, drift_events),
+        summary_kpis=_summary_kpis(series, incidents, episodic, drift_events),
         series=series,
         periods=_build_periods(series),
         events=_build_events(series),
@@ -276,8 +312,8 @@ def build_timeline_response() -> Envelope[OperationalTimeline]:
     Exceptions are intentionally not cached by ``lru_cache``, so a transient
     read failure self-recovers on the next request.
     """
-    scores, incidents, drift_events = _load_artifacts()
+    scores, incidents, episodic, drift_events = _load_artifacts()
     return Envelope[OperationalTimeline](
         meta=build_view_meta(TIMELINE_NOTICE_KEYS),
-        data=_build_timeline(scores, incidents, drift_events),
+        data=_build_timeline(scores, incidents, episodic, drift_events),
     )

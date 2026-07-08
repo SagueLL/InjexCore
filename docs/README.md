@@ -68,13 +68,17 @@ model fitting or scoring.
 
 ## dashboard/ — consumption contract
 
-The read-only contract a future Technical Validation Dashboard consumes. Pins
-the canonical rematerialized chain, enumerates allowed artifacts and forbidden
-views, and is enforced by the lineage validator in [`src/dashboard/`](../src/dashboard/).
+The read-only contract the Technical Validation Dashboard consumes. Pins the
+canonical rematerialized chain, enumerates allowed artifacts and forbidden views,
+and is enforced by the lineage validator in [`src/dashboard/`](../src/dashboard/).
+The dashboard itself is the FastAPI service in [`src/api/`](../src/api/) plus the
+Next.js app in [`apps/dashboard/`](../apps/dashboard/).
 
 | Doc | Covers |
 |---|---|
 | [dashboard/dashboard_data_contract.md](dashboard/dashboard_data_contract.md) | Canonical run pins, allowed artifact groups (purpose/safe/unsafe/warning), forbidden MVP views, required warning copy, read-only / no-approval / no-refit boundaries. |
+| [dashboard/dashboard_api_contract.md](dashboard/dashboard_api_contract.md) | The API boundary (contractVersion 1.1): endpoints, `{meta, data}` envelopes, per-view notice sets, backend→UI enum mappings, computed-field rules (`evidenceShare`, day-status ladder), error envelope, calibration pins. |
+| [dashboard/running_the_dashboard.md](dashboard/running_the_dashboard.md) | Two-process dev flow: install, start the API, start Next, `DASHBOARD_API_URL`, what `LINEAGE_INVALID` / `ARTIFACT_UNREADABLE` mean, why `lineage.severity == "warning"` is expected, MVP security assumptions, verification commands. |
 
 ## project-state/ — versioned snapshots
 

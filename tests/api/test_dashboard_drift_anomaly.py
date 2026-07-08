@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from src.api.errors import ArtifactUnreadableError
 from src.api.main import app
 from src.api.services import drift_anomaly, lineage_gate
+from src.api.services._series import episodic_incidents
 from src.api.services.drift_anomaly import _Artifacts
 from src.api.services.lineage_gate import ApiLineageResult
 
@@ -46,38 +47,44 @@ _ARTIFACT_UNREADABLE_BODY = {
 # Five scored days exercising the full §6 ladder mapped into this view's
 # severity vocabulary (drift-status days read as warning — no drift slot);
 # 2024-01-05 has only an unscored row and must be omitted from the series.
+#
+# `evidenceShare` is anomalyCount / scored rows. `inc-recurring` is a
+# recurring-pattern envelope spanning every fixture day: were it not excluded,
+# 2024-01-04 and 2024-01-06 would both read "warning" instead of "normal".
 _EXPECTED_SERIES = [
     {
         "date": "2024-01-01",
-        "anomalyScore": 0.48,
+        "evidenceShare": 0.6,  # 3 non-normal of 5 scored
         "anomalyCount": 3,
         "residualCount": 2,
         "severity": "critical",
     },
     {
         "date": "2024-01-02",
-        "anomalyScore": 0.2,
+        "evidenceShare": 1.0,
         "anomalyCount": 1,
         "residualCount": 1,
         "severity": "warning",  # drift-event day -> warning (mapped, locked)
     },
     {
         "date": "2024-01-03",
-        "anomalyScore": 0.3,
+        "evidenceShare": 1.0,
         "anomalyCount": 1,
         "residualCount": 0,
         "severity": "warning",
     },
     {
+        # The old p95 arm fired here (0.95 >= 0.9) on a day whose only scored row
+        # was normal. The evidence share is 0.0, so the day is honestly normal.
         "date": "2024-01-04",
-        "anomalyScore": 0.95,
+        "evidenceShare": 0.0,
         "anomalyCount": 0,
         "residualCount": 0,
-        "severity": "warning",  # threshold arm: p95 >= 0.9, no overlaps
+        "severity": "normal",
     },
     {
         "date": "2024-01-06",
-        "anomalyScore": 0.1,
+        "evidenceShare": 0.0,
         "anomalyCount": 0,
         "residualCount": 0,
         "severity": "normal",
@@ -92,7 +99,7 @@ def _synthetic_artifacts_frames() -> _Artifacts:
         {
             "timestamp": pd.to_datetime(
                 [
-                    # 01-01: five rows -> p95 = 0.48 exactly; 3 non-normal.
+                    # 01-01: five scored rows, 3 non-normal -> share 0.6
                     "2024-01-01 01:00",
                     "2024-01-01 02:00",
                     "2024-01-01 03:00",
@@ -100,12 +107,11 @@ def _synthetic_artifacts_frames() -> _Artifacts:
                     "2024-01-01 05:00",
                     "2024-01-02 10:00",
                     "2024-01-03 10:00",
-                    "2024-01-04 10:00",  # threshold arm: 0.95 >= 0.9
+                    "2024-01-04 10:00",  # only scored row is normal -> share 0.0
                     "2024-01-05 10:00",  # unscored-only day -> omitted
                     "2024-01-06 10:00",
                 ]
             ),
-            "combined_score": [0.1, 0.2, 0.3, 0.4, 0.5, 0.2, 0.3, 0.95, 0.99, 0.1],
             "severity": [
                 "normal",
                 "normal",
@@ -136,14 +142,21 @@ def _synthetic_artifacts_frames() -> _Artifacts:
     )
     incidents = pd.DataFrame(
         {
-            "incident_id": ["inc-anomaly", "inc-warning", "inc-info", "inc-suppressed"],
-            "severity": ["anomaly", "warning", "info", "critical"],
+            "incident_id": [
+                "inc-anomaly",
+                "inc-warning",
+                "inc-info",
+                "inc-suppressed",
+                "inc-recurring",
+            ],
+            "severity": ["anomaly", "warning", "info", "critical", "warning"],
             "start_timestamp": pd.to_datetime(
                 [
                     "2024-01-01 06:00",
                     "2024-01-02 00:00",
                     "2024-01-06 00:00",
                     "2024-01-06 00:00",
+                    "2024-01-01 00:00",
                 ]
             ),
             "end_timestamp": pd.to_datetime(
@@ -152,14 +165,24 @@ def _synthetic_artifacts_frames() -> _Artifacts:
                     "2024-01-03 23:00",
                     "2024-01-06 12:00",
                     "2024-01-06 23:00",
+                    "2024-01-06 23:59",
                 ]
             ),
+            # A malformed cell must be treated as episodic (kept), never raise.
+            "evidence": [
+                "{}",
+                '{"merged_from": 2}',
+                "{",
+                "{}",
+                '{"recurring_pattern": true, "collapsed_incident_count": 9}',
+            ],
         }
     )
     suppressed = pd.DataFrame({"suppressed_incident_id": ["inc-suppressed"]})
     unsuppressed = incidents[
         ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
     ].reset_index(drop=True)
+    episodic = episodic_incidents(unsuppressed)
     drift_events = pd.DataFrame(
         {
             "status": ["active", "candidate"],
@@ -206,7 +229,9 @@ def _synthetic_artifacts_frames() -> _Artifacts:
             ],
         }
     )
-    return _Artifacts(scores, unsuppressed, drift_events, scenario_scores, rate.iloc[1])
+    return _Artifacts(
+        scores, unsuppressed, episodic, drift_events, scenario_scores, rate.iloc[1]
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -245,10 +270,10 @@ def test_drift_anomaly_meta_matches_contract(monkeypatch: pytest.MonkeyPatch) ->
     _patch_lineage(monkeypatch, _lineage("ok"))
     with TestClient(app) as client:
         meta = client.get("/api/v1/dashboard/drift-anomaly").json()["meta"]
-    assert meta["contractVersion"] == "1.0"
+    assert meta["contractVersion"] == "1.1"
     assert meta["runId"] == "remat-v1-20260616T102558Z"
     assert meta["bomRunId"] == "20260612T124909Z"
-    assert meta["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert meta["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     # Exact equality locks keys, copy and order (notice presence is contract).
     assert meta["notices"] == _EXPECTED_NOTICES
 
@@ -299,7 +324,8 @@ def test_evidence_series_omits_unscored_only_days(
     dates = [point["date"] for point in data["evidenceSeries"]]
     # 2024-01-05 has one row, but it is unscored-severity -> the day is omitted.
     assert "2024-01-05" not in dates
-    assert all(point["anomalyScore"] != 0.99 for point in data["evidenceSeries"])
+    # The unscored row must not reach either the numerator or the denominator.
+    assert len(data["evidenceSeries"]) == 5
 
 
 def test_residual_count_filters_scenario_and_suppression(
@@ -445,7 +471,7 @@ def test_drift_anomaly_json_is_camelcase(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "detectionMethods" in data and "detection_methods" not in data
     assert "affectedSignals" in data and "affected_signals" not in data
     point = data["evidenceSeries"][0]
-    assert "anomalyScore" in point and "anomaly_score" not in point
+    assert "evidenceShare" in point and "evidence_share" not in point
     assert "anomalyCount" in point and "anomaly_count" not in point
     assert "residualCount" in point and "residual_count" not in point
     signal = data["affectedSignals"][0]

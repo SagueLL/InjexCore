@@ -1,8 +1,14 @@
 // Centralized data access for the read-only dashboard API. Server-side only:
 // DASHBOARD_API_URL has no NEXT_PUBLIC_ prefix, so it never reaches the
 // client bundle — call these functions from Server Components, not client
-// code. Errors are never masked with demo data: backend error envelopes
-// become DashboardApiError, and network failures propagate as-is.
+// code. Errors are never masked with demo data: backend error envelopes and
+// unreachable-API failures alike become DashboardApiError and propagate.
+//
+// Only enveloped getters are exported. A `.data`-only convenience getter would
+// silently discard `meta.notices`, and rendering those notices is part of the
+// API contract, not a frontend courtesy (data contract §5.4).
+
+import { unstable_rethrow } from "next/navigation";
 
 import type {
   DashboardApiErrorBody,
@@ -21,8 +27,13 @@ export class DashboardApiError extends Error {
   readonly status: number;
   readonly code: string;
 
-  constructor(status: number, code: string, message: string) {
-    super(message);
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = "DashboardApiError";
     this.status = status;
     this.code = code;
@@ -45,7 +56,25 @@ function isDashboardApiErrorBody(body: unknown): body is DashboardApiErrorBody {
 export async function fetchDashboardApi<T>(path: string): Promise<T> {
   // no-store: always fetch per request — the Next 16 default would freeze
   // the response into the static prerender at build time.
-  const response = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+  } catch (cause) {
+    // Next signals control flow (dynamic-rendering bailout, redirect, notFound)
+    // by throwing internal errors from fetch. Swallowing them breaks the build:
+    // a `no-store` fetch throws DYNAMIC_SERVER_USAGE during prerender so the
+    // route opts into dynamic rendering. Hand those straight back to Next.
+    unstable_rethrow(cause);
+    // A stopped backend is the most likely demo failure. Surface it as a typed
+    // error with a code, not a bare `TypeError: fetch failed`. Still no fallback
+    // data: the caller fails, it does not degrade to fixtures.
+    throw new DashboardApiError(
+      0,
+      "API_UNREACHABLE",
+      `The dashboard API did not answer at ${API_BASE_URL}. Is it running?`,
+      { cause },
+    );
+  }
   if (!response.ok) {
     let body: unknown = null;
     try {
@@ -71,6 +100,22 @@ export async function fetchDashboardApi<T>(path: string): Promise<T> {
 
 export async function getDashboardMeta(): Promise<DashboardMetaResponse> {
   return fetchDashboardApi<DashboardMetaResponse>("/api/v1/dashboard/meta");
+}
+
+// /meta is the gate banner source and answers 200 even when lineage is invalid,
+// so the only reason it fails is an unreachable API. The trust banner degrades to
+// "run identity unavailable" rather than taking a page down with it — the page's
+// own data fetch will surface the real failure.
+export async function getDashboardMetaSafe(): Promise<DashboardMetaResponse | null> {
+  try {
+    return await getDashboardMeta();
+  } catch (error) {
+    if (error instanceof DashboardApiError) {
+      console.error(`[dashboard] /meta unavailable: ${error.code}`, error.message);
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getOverviewPayload(): Promise<
@@ -113,22 +158,3 @@ export async function getIncidentsPayload(): Promise<
   );
 }
 
-export async function getOverviewData(): Promise<DashboardSummary> {
-  return (await getOverviewPayload()).data;
-}
-
-export async function getTimelineData(): Promise<OperationalTimeline> {
-  return (await getTimelinePayload()).data;
-}
-
-export async function getSensorHealthData(): Promise<SensorHealthSummary> {
-  return (await getSensorHealthPayload()).data;
-}
-
-export async function getDriftAnomalyData(): Promise<DriftAnomalySummary> {
-  return (await getDriftAnomalyPayload()).data;
-}
-
-export async function getIncidentsData(): Promise<IncidentsSummary> {
-  return (await getIncidentsPayload()).data;
-}
