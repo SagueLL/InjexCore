@@ -95,7 +95,7 @@ export default async function IncidentsPage() {
         description="Grouped evidence windows that should be reviewed with production and operator context."
       >
         <div className="space-y-4">
-          {sortedIncidents.map((incident, index) => (
+          {sortedIncidents.map((incident, index) => ( //duplicate key is safe here because the incidents are sorted and the index is stable, still have to review the backend to ensure that the incident id is unique across the dataset, but for now this is a safe approach
             <div key={`${incident.id}-${incident.startDate}-${incident.endDate}-${index}`} className="space-y-3 rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-0.5">
