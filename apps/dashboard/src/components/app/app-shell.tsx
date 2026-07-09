@@ -30,9 +30,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarNav />
           <div className="mt-auto border-t border-white/10 px-5 py-4">
             <p className="text-xs leading-5 text-white/45">
-            Dashboard v0.1
+              Dashboard v0.2
               <br />
-              Historical analysis
+              Read-only &middot; Historical analysis
             </p>
           </div>
         </aside>

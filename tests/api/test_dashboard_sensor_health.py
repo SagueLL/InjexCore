@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable
 
 import pandas as pd
 import pytest
@@ -45,55 +45,11 @@ _ISSUE_TYPE_UNION = {
 }
 
 
-def _synthetic_frames() -> tuple[pd.DataFrame, dict[str, float]]:
-    # Five sensors exercising every §6 status arm, including the
-    # quarantine-recommended OR-arm with zero faulty rows.
-    summary = pd.DataFrame(
-        {
-            "sensor": [
-                "s_healthy",
-                "s_warning",
-                "s_faulty",
-                "s_quarantine",
-                "s_unknown",
-            ],
-            "n_rows": [100] * 5,
-            "n_healthy": [100, 95, 90, 100, 60],
-            "n_warning": [0, 5, 0, 0, 0],
-            "n_faulty": [0, 0, 10, 0, 0],
-            "n_unknown": [0, 0, 0, 0, 40],
-            "n_events": [0, 1, 2, 1, 0],
-            "issue_row_counts": [
-                "{}",
-                '{"variance_explosion": 5}',
-                '{"flatline_zero": 10}',
-                "{}",
-                "{}",
-            ],
-            "quarantine_recommended": [False, False, False, True, False],
-        }
-    )
-    summary["issue_counts"] = summary["issue_row_counts"].map(
-        sensor_health._parse_issue_counts
-    )
-    coverage = {
-        "s_healthy": 100.0,
-        "s_warning": 99.0,
-        "s_faulty": 100.0,
-        "s_quarantine": 100.0,
-        "s_unknown": 42.0,
-    }
-    return summary, coverage
-
-
 @pytest.fixture(autouse=True)
-def _synthetic_artifacts(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    # Clear before AND after: a leaked cached envelope would silently decouple
-    # later tests from their fixtures.
-    sensor_health.build_sensor_health_response.cache_clear()
-    monkeypatch.setattr(sensor_health, "_load_artifacts", _synthetic_frames)
-    yield
-    sensor_health.build_sensor_health_response.cache_clear()
+def _synthetic_artifacts(patched_sensor_health: None) -> None:
+    # The synthetic frames live in conftest: /overview shares this builder's
+    # cache, so the two views must be fed from one source.
+    return None
 
 
 def _patch_lineage(monkeypatch: pytest.MonkeyPatch, result: ApiLineageResult) -> None:
@@ -138,10 +94,10 @@ def test_sensor_health_meta_matches_contract(monkeypatch: pytest.MonkeyPatch) ->
     _patch_lineage(monkeypatch, _lineage("ok"))
     with TestClient(app) as client:
         meta = client.get("/api/v1/dashboard/sensor-health").json()["meta"]
-    assert meta["contractVersion"] == "1.0"
+    assert meta["contractVersion"] == "1.1"
     assert meta["runId"] == "remat-v1-20260616T102558Z"
     assert meta["bomRunId"] == "20260612T124909Z"
-    assert meta["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert meta["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     # Exact equality locks keys, copy and order (notice presence is contract).
     assert meta["notices"] == _EXPECTED_NOTICES
 
@@ -312,13 +268,14 @@ def test_sensor_health_unreadable_artifacts_return_503_contract(
 
 def test_sensor_health_response_is_cached_after_first_hit(
     monkeypatch: pytest.MonkeyPatch,
+    sensor_health_frames: Callable[[], tuple[pd.DataFrame, dict[str, float]]],
 ) -> None:
     _patch_lineage(monkeypatch, _lineage("ok"))
     calls = {"count": 0}
 
     def _counting_loader() -> tuple[pd.DataFrame, dict[str, float]]:
         calls["count"] += 1
-        return _synthetic_frames()
+        return sensor_health_frames()
 
     monkeypatch.setattr(sensor_health, "_load_artifacts", _counting_loader)
     with TestClient(app) as client:

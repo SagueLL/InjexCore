@@ -2,9 +2,10 @@ import { PageHeader } from "@/components/app/page-header";
 import { AnomalyEvidenceChart } from "@/components/charts/anomaly-evidence-chart";
 import { ChartContainer } from "@/components/charts/chart-container";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { NoticeStrip } from "@/components/dashboard/notice-strip";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { getDriftAnomalyData } from "@/lib/dashboard/data-access";
+import { getDriftAnomalyPayload } from "@/lib/dashboard/data-access";
 
 import type { ContributionLevel } from "@/types/drift-anomaly";
 
@@ -17,7 +18,7 @@ function formatCount(value: number): string {
 }
 
 export default async function DriftAnomalyPage() {
-  const driftAnomaly = await getDriftAnomalyData();
+  const { meta, data: driftAnomaly } = await getDriftAnomalyPayload();
 
   return (
     <div className="space-y-6">
@@ -25,6 +26,8 @@ export default async function DriftAnomalyPage() {
         title="Drift & Anomaly Intelligence"
         description="Behavioural deviation and anomaly evidence across the analysed period."
       />
+
+      <NoticeStrip notices={meta.notices} />
 
       <SectionCard
         title="Analysed context"
@@ -74,8 +77,8 @@ export default async function DriftAnomalyPage() {
 
       <ChartContainer
         title="Anomaly evidence over time"
-        description="Raw anomaly evidence, residual review volume and deviation score across the analysed period."
-        footer="Residual review represents anomaly evidence that remains after contextual filtering and should be interpreted with operational knowledge."
+        description="Raw anomaly evidence rows, residual review volume and the daily evidence share across the analysed period."
+        footer="Evidence share is the fraction of a day's scored rows flagged warning or anomaly — a rate, not a model score. Residual review represents anomaly evidence that remains after contextual filtering and should be interpreted with operational knowledge."
       >
         <AnomalyEvidenceChart data={driftAnomaly.evidenceSeries} />
       </ChartContainer>
@@ -90,8 +93,10 @@ export default async function DriftAnomalyPage() {
               <p className="text-sm font-medium text-foreground">
                 {method.label}
               </p>
+              {/* Row-level trigger counts, not windows: the context overlay row
+                  alone accounts for 30,096 rows on the pinned run. */}
               <p className="text-xs text-muted-foreground">
-                Evidence windows: {formatCount(method.evidenceCount)}
+                Evidence rows: {formatCount(method.evidenceCount)}
               </p>
               <p className="text-sm text-muted-foreground">
                 {method.description}

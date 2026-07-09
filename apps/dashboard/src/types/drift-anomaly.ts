@@ -22,7 +22,9 @@ export interface DriftAnomalyKpi {
 
 export interface AnomalyEvidencePoint {
   date: string;
-  anomalyScore: number;
+  /** Fraction (0–1) of the day's scored rows flagged warning or anomaly. A rate, not a score. */
+  evidenceShare: number;
+  /** The same population as an absolute row count. */
   anomalyCount: number;
   residualCount: number;
   severity: DriftAnomalySeverity;

@@ -17,7 +17,9 @@ export interface TimelineSummaryKpi {
 
 export interface TimelinePoint {
   date: string;
-  deviationScore: number;
+  /** Fraction (0–1) of the day's scored rows flagged warning or anomaly. A rate, not a score. */
+  evidenceShare: number;
+  /** Episodic incidents overlapping the day; recurring-pattern envelopes are excluded. */
   incidentCount: number;
   status: TimelineStatus;
 }

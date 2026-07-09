@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "InjexCore — Industrial Intelligence",
   description:
-    "Operational intelligence dashboard for injection-moulding production data.",
+    "Read-only technical validation dashboard for the InjexCore intelligence layer (pelletizer line, offline historical analysis).",
 };
 
 export default function RootLayout({

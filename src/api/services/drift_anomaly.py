@@ -33,7 +33,7 @@ from src.api.schemas.drift_anomaly import (
     DriftAnomalySeverity,
     DriftAnomalySummary,
 )
-from src.api.services._series import daily_p95, day_statuses
+from src.api.services._series import daily_evidence, day_statuses, episodic_incidents
 from src.api.services.view_meta import build_view_meta
 from src.dashboard.contract import CANONICAL_RUN_ID
 from src.intelligence._common.runs import resolve_run
@@ -55,7 +55,9 @@ _DATASET_NAME = "Real industrial dataset"
 _QUARANTINE_SCENARIO_ID = "quarantine_inlet_hopper_points_interpretive"
 _DOMINANT_FAULTY_SENSOR = "inlet_hopper_points"
 
-_SCORE_COLUMNS = ["timestamp", "combined_score", "severity", "triggered_detectors"]
+# combined_score is deliberately absent: no served field derives from it any more
+# (the daily p95 it fed was saturated — see services/_series.py).
+_SCORE_COLUMNS = ["timestamp", "severity", "triggered_detectors"]
 _SCENARIO_COLUMNS = ["timestamp", "scenario_id", "row_suppressed_for_review"]
 _RATE_COLUMNS = [
     "scenario_id",
@@ -81,6 +83,8 @@ _STATUS_TO_SEVERITY: dict[str, DriftAnomalySeverity] = {
 class _Artifacts(NamedTuple):
     scores: pd.DataFrame
     incidents: pd.DataFrame
+    #: `incidents` minus the recurring-pattern envelopes; drives the day ladder.
+    episodic_incidents: pd.DataFrame
     drift_events: pd.DataFrame
     scenario_scores: pd.DataFrame
     rate_row: pd.Series
@@ -123,21 +127,29 @@ def _load_artifacts() -> _Artifacts:
             scoring_run / scoring_io.ANOMALY_RATE_COMPARISON_FILE,
             columns=_RATE_COLUMNS,
         )
+        # Filter suppression here so no consumer ever sees suppressed incidents.
+        unsuppressed = incidents[
+            ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
+        ].reset_index(drop=True)
+        # Inside the try: a missing `evidence` column is a schema change, and must
+        # fail closed rather than silently disable the recurring-pattern filter.
+        episodic = episodic_incidents(unsuppressed)
     except (OSError, ValueError, KeyError) as exc:
         # Argument-less on purpose: resolve_run/pyarrow messages embed
         # filesystem paths the API must never expose.
         raise ArtifactUnreadableError() from exc
-    # Filter suppression here so no consumer ever sees suppressed incidents.
-    unsuppressed = incidents[
-        ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
-    ].reset_index(drop=True)
     quarantine = rate[rate["scenario_id"] == _QUARANTINE_SCENARIO_ID]
     if quarantine.empty:
         # A rate table without the quarantine scenario cannot back this view's
         # funnel — fail closed rather than serving partial data.
         raise ArtifactUnreadableError()
     return _Artifacts(
-        scores, unsuppressed, drift_events, scenario_scores, quarantine.iloc[0]
+        scores,
+        unsuppressed,
+        episodic,
+        drift_events,
+        scenario_scores,
+        quarantine.iloc[0],
     )
 
 
@@ -193,7 +205,7 @@ def _funnel_kpis(rate_row: pd.Series) -> list[DriftAnomalyKpi]:
 
 def _evidence_series(
     scores: pd.DataFrame,
-    incidents: pd.DataFrame,
+    episodic: pd.DataFrame,
     drift_events: pd.DataFrame,
     scenario_scores: pd.DataFrame,
 ) -> list[AnomalyEvidencePoint]:
@@ -201,16 +213,11 @@ def _evidence_series(
 
     Counts are reindexed onto the scored days: scored days without residual
     scenario rows serve 0; scenario rows on days without any scored row are
-    dropped with the day (the §6 omission rule).
+    dropped with the day (the §6 omission rule). ``anomalyCount`` is the absolute
+    numerator of ``evidenceShare``, so both come from one aggregation.
     """
-    p95 = daily_p95(scores)
-    days = pd.DatetimeIndex(p95.index)
-    non_normal = scores[scores["severity"].isin(["warning", "anomaly"])]
-    anomaly_counts = (
-        non_normal.groupby(non_normal["timestamp"].dt.floor("D"))
-        .size()
-        .reindex(days, fill_value=0)
-    )
+    evidence = daily_evidence(scores)
+    days = pd.DatetimeIndex(evidence.index)
     residual = scenario_scores[
         (scenario_scores["scenario_id"] == _QUARANTINE_SCENARIO_ID)
         & ~scenario_scores["row_suppressed_for_review"]
@@ -222,18 +229,20 @@ def _evidence_series(
     )
     severities = [
         _STATUS_TO_SEVERITY[status]
-        for status in day_statuses(days, p95, incidents, drift_events)
+        for status in day_statuses(
+            days, evidence["evidence_share"], episodic, drift_events
+        )
     ]
     return [
         AnomalyEvidencePoint(
             date=day.strftime("%Y-%m-%d"),
-            anomaly_score=float(score),
-            anomaly_count=int(anomaly_count),
+            evidence_share=float(row.evidence_share),
+            anomaly_count=int(row.non_normal_rows),
             residual_count=int(residual_count),
             severity=severity,
         )
-        for (day, score), anomaly_count, residual_count, severity in zip(
-            p95.items(), anomaly_counts, residual_counts, severities, strict=True
+        for (day, row), residual_count, severity in zip(
+            evidence.iterrows(), residual_counts, severities, strict=True
         )
     ]
 
@@ -421,7 +430,7 @@ def _build_summary(artifacts: _Artifacts) -> DriftAnomalySummary:
         summary_kpis=_funnel_kpis(artifacts.rate_row),
         evidence_series=_evidence_series(
             artifacts.scores,
-            artifacts.incidents,
+            artifacts.episodic_incidents,
             artifacts.drift_events,
             artifacts.scenario_scores,
         ),

@@ -1,9 +1,15 @@
-# Dashboard API Contract (v0.2 — B1 design)
+# Dashboard API Contract (v0.2 — contractVersion 1.1)
 
-**Status: approved design, not yet implemented.** This is the B1 deliverable of
-Dashboard v0.2 (Real Data Connection): the API contract between the Intelligence-Layer
-artifacts and the Next.js dashboard (`apps/dashboard/`). Implementation (the FastAPI
-service, frontend fetch wiring) is B2+.
+**Status: implemented.** The read-only FastAPI service lives in `src/api/`; the Next.js
+dashboard (`apps/dashboard/`) consumes it through `src/lib/dashboard/data-access.ts`.
+This document is the API contract between the Intelligence-Layer artifacts and that
+dashboard.
+
+**contractVersion 1.1** (was 1.0) — breaking wire change: the timeline's
+`deviationScore` and drift-anomaly's `anomalyScore` were replaced by a single
+`evidenceShare` field with a different definition (see §6). Redefining a field's
+semantics under an unchanged version string would be the same class of trust bug this
+contract exists to prevent, so the version moved with it.
 
 This document governs the **API boundary** only. The artifact-level consumption
 contract — canonical run pins, allowed artifact groups, forbidden views, required
@@ -70,10 +76,10 @@ unwrapping happens in a thin frontend fetch layer.
 ```jsonc
 {
   "meta": {
-    "contractVersion": "1.0",
+    "contractVersion": "1.1",
     "runId": "remat-v1-20260616T102558Z",
     "bomRunId": "20260612T124909Z",
-    "dataGeneratedAt": "<run manifest completion time, UTC ISO>",  // NOT response time
+    "dataGeneratedAt": "2026-06-16T14:51:48Z",  // latest completion across the pinned chain; NOT response time
     "notices": [ { "key": "quarantine_pending", "text": "<exact §5.4 copy>" } ]
   },
   "data": { /* the view's existing *Summary shape */ }
@@ -95,7 +101,7 @@ it consumes (§5.2). Notice presence is part of the contract, not a frontend cou
 
 ```jsonc
 {
-  "contractVersion": "1.0",
+  "contractVersion": "1.1",
   "runId": "…", "bomRunId": "…", "dataGeneratedAt": "…",
   "trainWindowEnd": "2024-09-03",
   "lineage": { "isValid": true, "canonicalMatch": true, "severity": "warning", "warnings": ["…"] },
@@ -185,16 +191,37 @@ drift comparison); quarantine/pending states (reference + sensor-health artifact
 
 **Computed fields — contract-level rules:**
 
-- `deviationScore` (timeline) and `anomalyScore` (drift-anomaly): **per UTC day, p95
-  of `combined_score` over scored rows** (`severity != 'unscored'`), 3 decimals — one
-  rule, two views. (Mean flattens bursts; max is spike-noisy.)
-- `incidentCount`: incidents whose `[start, end]` **overlaps** the UTC day
+- `evidenceShare` (timeline **and** drift-anomaly — one rule, two views): **per UTC day,
+  the share of scored rows (`severity != 'unscored'`) whose severity ∈ {warning,
+  anomaly}**, 3 decimals. A **rate in [0, 1], not a model score**.
+  *Replaced `deviationScore` / `anomalyScore` (p95 of `combined_score`) at
+  contractVersion 1.1.* `combined_score` is a conservative max over per-detector
+  train-ECDF percentiles, so its daily p95 sat at ~1.0 almost everywhere — across the
+  117 served days: min 0.513, **median 0.979** — a line pinned to the top of a 0–1 axis,
+  carrying no information, including deep inside the training window. `evidenceShare`
+  on the same run: 27 days at exactly 0.000, median 0.008, stepping to 1.0 from
+  2024-09-18. That step *is* the inlet-hopper sensor fault. Do not rescale or
+  log-transform it away — explain it.
+- **Recurring-pattern incidents are excluded from every per-day computation.** An
+  incident whose `evidence` JSON carries `"recurring_pattern": true` is a *collapsed
+  envelope*: its `[start, end]` spans many intermittent member events (one such
+  incident collapsed 101 members across 115 of the 117 days), not a continuous
+  condition. It remains a full record in `/incidents` and in the timeline's
+  `Incident windows` total — only the daily series and day statuses exclude it, and
+  that exclusion is disclosed in the KPI description. Malformed or absent `evidence`
+  is treated as **episodic** (kept): over-flagging a day is loud, dropping evidence is
+  silent.
+- `incidentCount`: **episodic** incidents whose `[start, end]` **overlaps** the UTC day
   (active-count semantics, not started-that-day).
 - Timeline day `status`, precedence `critical > drift > warning > normal`: critical if
-  an unsuppressed source-severity ∈ {anomaly, critical} incident overlaps the day;
-  drift if a drift event with status ∈ {active, persistent} overlaps; warning if a
-  warning-severity incident overlaps or day p95 ≥ a declared threshold (open item,
-  §8); else normal. Days with zero scored rows are omitted (the type has no null slot).
+  an unsuppressed, episodic source-severity ∈ {anomaly, critical} incident overlaps the
+  day; drift if a drift event with status ∈ {active, persistent} overlaps; warning if an
+  episodic warning-severity incident overlaps or day `evidenceShare` ≥
+  `WARNING_EVIDENCE_SHARE` (0.05, §8); else normal. Days with zero scored rows are
+  omitted (the type has no null slot).
+  *Known consequence, disclosed not fixed:* `status == "drift"` is unreachable on the
+  canonical run — all 36 days overlapping an active/persistent drift event are also
+  overlapped by an anomaly/critical incident, and critical outranks drift.
 - `operationalStatus` ladder: `critical` = unsuppressed source-critical incident in
   the last 14 days of the period; `warning` = pending quarantine/reference proposal OR
   unsuppressed anomaly/critical incident OR `residual_material=True`; `normal` = none
@@ -279,8 +306,26 @@ suppressed 30,096 (90.7%); residual 3,090 = 1,887 warning + 1,203 anomaly;
    localhost / a trusted network only (record the assumption at deploy time).
 6. **Type-drift prevention**: generate TS types from OpenAPI or zod-parse in the fetch
    layer; golden-payload snapshot tests per view against the canonical run.
-7. **Calibration items**: timeline-day `warning` p95 threshold; material-share
-   thresholds for the per-sensor overall status (§6).
+7. **Calibration items**: ~~timeline-day `warning` p95 threshold~~ **RESOLVED at
+   contractVersion 1.1**; material-share thresholds for the per-sensor overall status
+   (§6) remain open.
+   *Finding.* The p95 warning arm was **never binding**: across 117 days there were
+   **zero** days where `p95 >= 0.9` was the sole reason for a `warning` status.
+   Recalibrating the threshold — to any value — would have changed nothing. The real
+   cause of "68 warning + 49 critical + **zero normal** days" was a single 115.7-day
+   recurring-pattern `sensor_warning` incident overlapping all 117 days, so the ladder
+   marked every day (including the whole training baseline window) as at least warning.
+   Fixing the metric (`evidenceShare`) *and* excluding recurring-pattern envelopes
+   yields **57 normal / 11 warning / 49 critical**, with the training baseline window
+   correctly modal-`normal`.
+   `WARNING_EVIDENCE_SHARE = 0.05` decides only 11 of 117 days (the rest are decided by
+   episodic incident overlap or by carrying no evidence at all), so the view is not
+   sensitive to it — but it is a magic number and must stay visible here and in the
+   chart footer, or it becomes the next pinned `17`.
+   *Second finding, disclosed not fixed:* every day from 2024-09-04 onward is
+   `critical` (13/13 post-training validation days, 22/22 fault-window days), driven by
+   anomaly/critical incidents rather than by the inlet-hopper fault (which starts
+   2024-09-17). Genuine, and a likely demo question.
 8. **Timeline periods/events provenance**: computed anchors recommended — confirm at
    implementation review.
 9. **Period-semantics UX**: the real period extends ~5 weeks past the demo's;

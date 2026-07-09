@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from src.api.errors import ArtifactUnreadableError
 from src.api.main import app
 from src.api.services import lineage_gate, timeline
+from src.api.services._series import episodic_incidents
 from src.api.services.lineage_gate import ApiLineageResult
 
 _EXPECTED_NOTICES = [
@@ -37,46 +38,54 @@ _ARTIFACT_UNREADABLE_BODY = {
 
 # Five scored days exercising the full §6 status ladder; 2024-01-05 has only
 # an unscored row and must be omitted from the series.
+#
+# `inc-recurring` is a warning-severity recurring-pattern envelope spanning every
+# fixture day. Its exclusion is *proved*, not assumed: were it counted, every
+# incidentCount below would be one higher and 2024-01-06 would read "warning".
 _EXPECTED_SERIES = [
     {
         "date": "2024-01-01",
-        "deviationScore": 0.48,
+        "evidenceShare": 0.2,
         "incidentCount": 1,
         "status": "critical",
     },
     {
         "date": "2024-01-02",
-        "deviationScore": 0.2,
+        "evidenceShare": 0.0,
         "incidentCount": 1,
         "status": "drift",
     },
     {
         "date": "2024-01-03",
-        "deviationScore": 0.3,
+        "evidenceShare": 0.0,
         "incidentCount": 1,
         "status": "warning",
     },
     {
+        # Threshold arm: no incident overlaps, but the day's only scored row
+        # carries evidence -> share 1.0 >= WARNING_EVIDENCE_SHARE.
         "date": "2024-01-04",
-        "deviationScore": 0.95,
+        "evidenceShare": 1.0,
         "incidentCount": 0,
         "status": "warning",
     },
     {
         "date": "2024-01-06",
-        "deviationScore": 0.1,
+        "evidenceShare": 0.0,
         "incidentCount": 1,
         "status": "normal",
     },
 ]
 
+_Frames = tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
 
-def _synthetic_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+
+def _synthetic_frames() -> _Frames:
     scores = pd.DataFrame(
         {
             "timestamp": pd.to_datetime(
                 [
-                    # 01-01: five rows -> p95 = 0.48 exactly (linear interpolation)
+                    # 01-01: five scored rows, one non-normal -> share 0.2
                     "2024-01-01 01:00",
                     "2024-01-01 02:00",
                     "2024-01-01 03:00",
@@ -84,25 +93,42 @@ def _synthetic_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
                     "2024-01-01 05:00",
                     "2024-01-02 10:00",
                     "2024-01-03 10:00",
-                    "2024-01-04 10:00",  # threshold arm: 0.95 >= 0.9, no overlaps
+                    "2024-01-04 10:00",  # threshold arm: share 1.0, no overlaps
                     "2024-01-05 10:00",  # unscored-only day -> omitted
                     "2024-01-06 10:00",
                 ]
             ),
-            "combined_score": [0.1, 0.2, 0.3, 0.4, 0.5, 0.2, 0.3, 0.95, 0.99, 0.1],
-            "severity": ["normal"] * 8 + ["unscored", "normal"],
+            "severity": [
+                "normal",
+                "normal",
+                "normal",
+                "normal",
+                "anomaly",
+                "normal",
+                "normal",
+                "warning",
+                "unscored",
+                "normal",
+            ],
         }
     )
     incidents = pd.DataFrame(
         {
-            "incident_id": ["inc-anomaly", "inc-warning", "inc-info", "inc-suppressed"],
-            "severity": ["anomaly", "warning", "info", "critical"],
+            "incident_id": [
+                "inc-anomaly",
+                "inc-warning",
+                "inc-info",
+                "inc-suppressed",
+                "inc-recurring",
+            ],
+            "severity": ["anomaly", "warning", "info", "critical", "warning"],
             "start_timestamp": pd.to_datetime(
                 [
                     "2024-01-01 06:00",
                     "2024-01-02 00:00",
                     "2024-01-06 00:00",
                     "2024-01-06 00:00",
+                    "2024-01-01 00:00",
                 ]
             ),
             "end_timestamp": pd.to_datetime(
@@ -111,8 +137,19 @@ def _synthetic_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
                     "2024-01-03 23:00",
                     "2024-01-06 12:00",
                     "2024-01-06 23:00",
+                    "2024-01-06 23:59",
                 ]
             ),
+            # `inc-info` carries a malformed cell: it must be treated as episodic
+            # (kept), never raise. `inc-warning` mimics a merged cluster, whose
+            # evidence no longer carries the recurring flag.
+            "evidence": [
+                "{}",
+                '{"merged_from": 2}',
+                "{",
+                "{}",
+                '{"recurring_pattern": true, "collapsed_incident_count": 9}',
+            ],
         }
     )
     suppressed = pd.DataFrame({"suppressed_incident_id": ["inc-suppressed"]})
@@ -126,7 +163,7 @@ def _synthetic_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     unsuppressed = incidents[
         ~incidents["incident_id"].isin(suppressed["suppressed_incident_id"])
     ].reset_index(drop=True)
-    return scores, unsuppressed, drift_events
+    return scores, unsuppressed, episodic_incidents(unsuppressed), drift_events
 
 
 @pytest.fixture(autouse=True)
@@ -165,10 +202,10 @@ def test_timeline_meta_matches_contract(monkeypatch: pytest.MonkeyPatch) -> None
     _patch_lineage(monkeypatch, _lineage("ok"))
     with TestClient(app) as client:
         meta = client.get("/api/v1/dashboard/timeline").json()["meta"]
-    assert meta["contractVersion"] == "1.0"
+    assert meta["contractVersion"] == "1.1"
     assert meta["runId"] == "remat-v1-20260616T102558Z"
     assert meta["bomRunId"] == "20260612T124909Z"
-    assert meta["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert meta["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     # Exact equality locks keys, copy and order (notice presence is contract).
     assert meta["notices"] == _EXPECTED_NOTICES
 
@@ -199,8 +236,9 @@ def test_timeline_series_matches_status_ladder(
     _patch_lineage(monkeypatch, _lineage("ok"))
     with TestClient(app) as client:
         series = client.get("/api/v1/dashboard/timeline").json()["data"]["series"]
-    # Locks p95 (3 decimals), overlap counts, suppression filtering and the
-    # full critical > drift > warning > normal precedence in one comparison.
+    # Locks the evidence share (3 decimals), episodic-only overlap counts,
+    # suppression filtering, recurring-pattern exclusion and the full
+    # critical > drift > warning > normal precedence in one comparison.
     assert series == _EXPECTED_SERIES
 
 
@@ -213,7 +251,8 @@ def test_timeline_omits_days_without_scored_rows(
     dates = [point["date"] for point in series]
     # 2024-01-05 has one row, but it is unscored-severity -> the day is omitted.
     assert "2024-01-05" not in dates
-    assert all(point["deviationScore"] != 0.99 for point in series)
+    # The unscored row must not reach either the numerator or the denominator.
+    assert len(series) == 5
 
 
 def test_timeline_summary_kpis_are_raw_numbers(
@@ -228,10 +267,15 @@ def test_timeline_summary_kpis_are_raw_numbers(
         "Sustained drift events",
         "Days with critical evidence",
     ]
-    assert [k["value"] for k in kpis] == [5, 3, 1, 1]
+    # "Incident windows" stays the full unsuppressed total (4, incl. the recurring
+    # envelope) so it agrees with /incidents; the exclusion is disclosed in copy.
+    assert [k["value"] for k in kpis] == [5, 4, 1, 1]
     for kpi in kpis:
         assert isinstance(kpi["value"], int)
         assert not isinstance(kpi["value"], str)
+    incident_windows = next(k for k in kpis if k["label"] == "Incident windows")
+    assert "1 recurring-pattern episode(s)" in incident_windows["description"]
+    assert "excluded from the daily series" in incident_windows["description"]
 
 
 def test_timeline_events_include_contract_anchors(
@@ -245,9 +289,10 @@ def test_timeline_events_include_contract_anchors(
     # Contract-required baseline anchor at the train-window end.
     assert by_date["2024-09-03"]["type"] == "baseline"
     assert by_date["2024-09-17"]["type"] == "review"
-    # Peak deviation day computed from the series (first at max, 0.95).
+    # Peak evidence-share day computed from the series (first at max, 1.0).
     assert by_date["2024-01-04"]["type"] == "incident"
     assert by_date["2024-01-04"]["severity"] == "warning"
+    assert by_date["2024-01-04"]["title"] == "Peak daily evidence share"
     assert [event["date"] for event in events] == sorted(e["date"] for e in events)
     # §5.3 forbidden-framing tripwire: quarantine is pending, nothing excluded.
     text = resp.text.lower()
@@ -278,7 +323,7 @@ def test_timeline_json_is_camelcase(monkeypatch: pytest.MonkeyPatch) -> None:
     with TestClient(app) as client:
         data = client.get("/api/v1/dashboard/timeline").json()["data"]
     point = data["series"][0]
-    assert "deviationScore" in point and "deviation_score" not in point
+    assert "evidenceShare" in point and "evidence_share" not in point
     assert "incidentCount" in point and "incident_count" not in point
     assert "summaryKpis" in data and "summary_kpis" not in data
     period = data["periods"][0]
@@ -300,7 +345,7 @@ def test_timeline_unreadable_artifacts_return_503_contract(
 ) -> None:
     _patch_lineage(monkeypatch, _lineage("ok"))
 
-    def _raise() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def _raise() -> _Frames:
         raise ArtifactUnreadableError()
 
     monkeypatch.setattr(timeline, "_load_artifacts", _raise)
@@ -316,7 +361,7 @@ def test_timeline_response_is_cached_after_first_hit(
     _patch_lineage(monkeypatch, _lineage("ok"))
     calls = {"count": 0}
 
-    def _counting_loader() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def _counting_loader() -> _Frames:
         calls["count"] += 1
         return _synthetic_frames()
 

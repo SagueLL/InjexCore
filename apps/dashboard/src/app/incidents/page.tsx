@@ -2,17 +2,12 @@ import { PageHeader } from "@/components/app/page-header";
 import { ChartContainer } from "@/components/charts/chart-container";
 import { IncidentsSeverityChart } from "@/components/charts/incidents-severity-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { NoticeStrip } from "@/components/dashboard/notice-strip";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { getIncidentsData } from "@/lib/dashboard/data-access";
+import { getIncidentsPayload } from "@/lib/dashboard/data-access";
 
-import type { IncidentSeverity, IncidentStatus } from "@/types/incidents";
-
-const SEVERITY_ORDER: Record<IncidentSeverity, number> = {
-  critical: 0,
-  warning: 1,
-  normal: 2,
-};
+import type { IncidentStatus } from "@/types/incidents";
 
 function formatIncidentStatus(status: IncidentStatus): string {
   const text = status.replace(/_/g, " ");
@@ -24,10 +19,10 @@ function formatSignalList(signals: string[]): string {
 }
 
 export default async function IncidentsPage() {
-  const incidentsSummary = await getIncidentsData();
-  const sortedIncidents = [...incidentsSummary.incidents].sort(
-    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity],
-  );
+  // The API order IS the product feature: review-pack priority, then source
+  // severity (4 tiers), then start date. Re-sorting by the 3-tier UI severity
+  // collapsed that ordering and buried the pack priority.
+  const { meta, data: incidentsSummary } = await getIncidentsPayload();
 
   return (
     <div className="space-y-6">
@@ -35,6 +30,8 @@ export default async function IncidentsPage() {
         title="Incidents"
         description="Grouped operational events requiring technical review."
       />
+
+      <NoticeStrip notices={meta.notices} />
 
       <SectionCard
         title="Analysed context"
@@ -95,8 +92,15 @@ export default async function IncidentsPage() {
         description="Grouped evidence windows that should be reviewed with production and operator context."
       >
         <div className="space-y-4">
-          {sortedIncidents.map((incident, index) => ( //duplicate key is safe here because the incidents are sorted and the index is stable, still have to review the backend to ensure that the incident id is unique across the dataset, but for now this is a safe approach
-            <div key={`${incident.id}-${incident.startDate}-${incident.endDate}-${index}`} className="space-y-3 rounded-lg border p-4">
+          {/* `incident.id` is not unique on the pinned run (87 unique of 88 —
+              a known upstream defect in incident-id generation, pinned by
+              tests/api/test_dashboard_incidents.py). The list index disambiguates
+              the React key; it is never reordered or filtered on the client. */}
+          {incidentsSummary.incidents.map((incident, index) => (
+            <div
+              key={`${incident.id}-${index}`}
+              className="space-y-3 rounded-lg border p-4"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium text-foreground">

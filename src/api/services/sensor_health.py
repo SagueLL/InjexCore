@@ -300,3 +300,26 @@ def build_sensor_health_response() -> Envelope[SensorHealthSummary]:
         meta=build_view_meta(SENSOR_HEALTH_NOTICE_KEYS),
         data=_build_summary(summary, coverage),
     )
+
+
+def sensor_status_counts() -> dict[str, int]:
+    """Per-derived-status sensor counts for the pinned run.
+
+    Reads through :func:`build_sensor_health_response`'s cache, so no artifact is
+    read twice and no consumer can re-implement the §6 precedence rule.
+    """
+    return {
+        item.status: item.count
+        for item in build_sensor_health_response().data.distribution
+    }
+
+
+def problematic_sensor_count() -> int:
+    """Sensors with warning, critical or unknown derived status (§6 population).
+
+    Equals the sensor-health view's "Review required" KPI by construction — the
+    overview's "Problematic sensors" KPI therefore cannot contradict it. This is
+    the *problematic* count, not the monitored-sensor total.
+    """
+    counts = sensor_status_counts()
+    return counts["warning"] + counts["critical"] + counts["unknown"]

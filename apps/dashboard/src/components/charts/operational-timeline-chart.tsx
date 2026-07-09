@@ -31,9 +31,28 @@ const chartColors = {
   incidents: "#003773",
 }
 
+const PERCENT = new Intl.NumberFormat("en-US", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+function formatEvidenceShare(value: number): string {
+  return PERCENT.format(value);
+}
+
 export function OperationalTimelineChart({
   data,
 }: OperationalTimelineChartProps) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[320px] w-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          No scored production days available.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -41,9 +60,9 @@ export function OperationalTimelineChart({
           <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
           <XAxis dataKey="date" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
           <YAxis
-            yAxisId="deviation"
+            yAxisId="evidence"
             domain={[0, 1]}
-            tickFormatter={(value) => Number(value).toFixed(1)}
+            tickFormatter={formatEvidenceShare}
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
@@ -54,7 +73,13 @@ export function OperationalTimelineChart({
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
-          <Tooltip />
+          <Tooltip
+            formatter={(value, name) =>
+              name === "Non-normal evidence share"
+                ? formatEvidenceShare(Number(value))
+                : value
+            }
+          />
           <Legend/>
           <Bar
             yAxisId="incidents"
@@ -65,10 +90,10 @@ export function OperationalTimelineChart({
             radius={[6, 6, 0, 0]}
           />
           <Line
-            yAxisId="deviation"
+            yAxisId="evidence"
             type="monotone"
-            dataKey="deviationScore"
-            name="Deviation score"
+            dataKey="evidenceShare"
+            name="Non-normal evidence share"
             stroke={chartColors.deviation}
             strokeWidth={2}
             dot={{ r: 3 }}

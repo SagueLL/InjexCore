@@ -14,6 +14,15 @@ interface KpiCardProps {
   className?: string;
 }
 
+// The API serves raw numbers, never preformatted strings. The locale is pinned:
+// a floating locale would make the server and client render different digits and
+// trip a hydration mismatch.
+const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
+
+function formatValue(value: string | number): string {
+  return typeof value === "number" ? NUMBER_FORMAT.format(value) : value;
+}
+
 export function KpiCard({
   title,
   value,
@@ -30,7 +39,7 @@ export function KpiCard({
       </CardHeader>
       <CardContent className="space-y-1">
         <div className="text-2xl font-semibold tracking-tight text-foreground">
-          {value}
+          {formatValue(value)}
         </div>
         {description ? (
           <p className="text-xs text-muted-foreground">{description}</p>

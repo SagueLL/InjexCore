@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from src.api.errors import ArtifactUnreadableError
 from src.api.main import app
-from src.api.services import lineage_gate
+from src.api.services import lineage_gate, sensor_health
 from src.api.services.lineage_gate import ApiLineageResult
 
 _EXPECTED_NOTICES = [
@@ -31,6 +33,20 @@ _LINEAGE_INVALID_BODY = {
         "message": "Dashboard lineage validation failed.",
     }
 }
+_ARTIFACT_UNREADABLE_BODY = {
+    "error": {
+        "code": "ARTIFACT_UNREADABLE",
+        "message": "A required artifact could not be read.",
+    }
+}
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_artifacts(patched_sensor_health: None) -> None:
+    # /overview derives "Problematic sensors" through the sensor-health builder's
+    # cache, so it now needs that view's synthetic artifacts (conftest). The
+    # 5-sensor fixture yields healthy 1 / warning 1 / critical 2 / unknown 1.
+    return None
 
 
 def _patch_lineage(monkeypatch: pytest.MonkeyPatch, result: ApiLineageResult) -> None:
@@ -59,10 +75,10 @@ def test_overview_meta_matches_contract(monkeypatch: pytest.MonkeyPatch) -> None
     _patch_lineage(monkeypatch, _lineage("ok"))
     with TestClient(app) as client:
         meta = client.get("/api/v1/dashboard/overview").json()["meta"]
-    assert meta["contractVersion"] == "1.0"
+    assert meta["contractVersion"] == "1.1"
     assert meta["runId"] == "remat-v1-20260616T102558Z"
     assert meta["bomRunId"] == "20260612T124909Z"
-    assert meta["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert meta["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     # Exact equality locks keys, copy and order (notice presence is contract).
     assert meta["notices"] == _EXPECTED_NOTICES
 
@@ -93,7 +109,9 @@ def test_overview_kpis_are_raw_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
         "Contextualised anomalies",
     ]
     # Raw numbers on the wire — never preformatted strings like "167,331".
-    assert [k["value"] for k in kpis] == [167331, 88, 17, 30096]
+    # "Problematic sensors" is derived: warning 1 + critical 2 + unknown 1 = 4
+    # over the shared 5-sensor fixture. It is never the sensor *total* (5).
+    assert [k["value"] for k in kpis] == [167331, 88, 4, 30096]
     for kpi in kpis:
         assert isinstance(kpi["value"], int)
         assert not isinstance(kpi["value"], str)
@@ -137,3 +155,21 @@ def test_overview_invalid_lineage_returns_503_contract(
         resp = client.get("/api/v1/dashboard/overview")
     assert resp.status_code == 503
     assert resp.json() == _LINEAGE_INVALID_BODY
+
+
+def test_overview_unreadable_sensor_health_returns_503_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The derived "Problematic sensors" KPI makes /overview fail closed when the
+    # sensor-health artifacts are unreadable. Serving a stale pin instead would be
+    # the silent fallback the contract forbids.
+    _patch_lineage(monkeypatch, _lineage("ok"))
+
+    def _raise() -> tuple[pd.DataFrame, dict[str, float]]:
+        raise ArtifactUnreadableError()
+
+    monkeypatch.setattr(sensor_health, "_load_artifacts", _raise)
+    with TestClient(app) as client:
+        resp = client.get("/api/v1/dashboard/overview")
+    assert resp.status_code == 503
+    assert resp.json() == _ARTIFACT_UNREADABLE_BODY

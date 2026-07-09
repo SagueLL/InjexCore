@@ -8,6 +8,17 @@ from src.api.main import app
 from src.api.services import lineage_gate
 from src.api.services.lineage_gate import ApiLineageResult
 
+# The seven §5.4 texts, verbatim, in contract order (dashboard_data_contract.md).
+_REQUIRED_WARNINGS = [
+    "This dashboard is read-only and intended for technical validation.",
+    "Original anomaly scores are unchanged.",
+    "Adjusted review severity is interpretive post-processing, not model rescoring.",
+    "Quarantine is pending review and not approved.",
+    "Healthy-only residual drift is a proxy view.",
+    "Incident relationships are associative, not causal.",
+    "Plant records are still required before operational decisions.",
+]
+
 
 def _patch_lineage(monkeypatch: pytest.MonkeyPatch, result: ApiLineageResult) -> None:
     # Fake the startup evaluation so tests never touch real run manifests.
@@ -28,12 +39,14 @@ def test_meta_returns_200_and_identity(monkeypatch: pytest.MonkeyPatch) -> None:
         resp = client.get("/api/v1/dashboard/meta")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["contractVersion"] == "1.0"
+    assert body["contractVersion"] == "1.1"
     assert body["runId"] == "remat-v1-20260616T102558Z"
     assert body["bomRunId"] == "20260612T124909Z"
-    assert body["dataGeneratedAt"] == "2026-06-16T10:25:58Z"
+    assert body["dataGeneratedAt"] == "2026-06-16T14:51:48Z"
     assert body["trainWindowEnd"] == "2024-09-03"
-    assert isinstance(body["requiredWarnings"], list)
+    # Exact equality locks the full §5.4 set, its copy and its order. An empty
+    # list here would silently retire the contract's central honesty mechanism.
+    assert body["requiredWarnings"] == _REQUIRED_WARNINGS
 
 
 def test_meta_surfaces_startup_lineage(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import Field
+
 from src.api.schemas import CamelModel
 
 TimelineStatus = Literal["normal", "warning", "drift", "critical"]
@@ -26,10 +28,16 @@ class TimelineSummaryKpi(CamelModel):
 
 
 class TimelinePoint(CamelModel):
-    """One UTC day of the deviation series (days without scored rows are omitted)."""
+    """One UTC day of the evidence series (days without scored rows are omitted).
+
+    ``evidence_share`` is the fraction of the day's scored rows carrying warning or
+    anomaly evidence — a rate in [0, 1], not a model score. ``incident_count``
+    counts *episodic* incidents overlapping the day; recurring-pattern envelopes
+    span most of the period and are excluded (see ``services/_series.py``).
+    """
 
     date: str
-    deviation_score: float
+    evidence_share: float = Field(ge=0.0, le=1.0)
     incident_count: int
     status: TimelineStatus
 

@@ -2,21 +2,25 @@ import { PageHeader } from "@/components/app/page-header";
 import { ChartContainer } from "@/components/charts/chart-container";
 import { OperationalTimelineChart } from "@/components/charts/operational-timeline-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { NoticeStrip } from "@/components/dashboard/notice-strip";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { getTimelineData } from "@/lib/dashboard/data-access";
+import { getTimelinePayload } from "@/lib/dashboard/data-access";
 
 import type { OperationalStatus } from "@/types/dashboard";
 import type { TimelineStatus } from "@/types/timeline";
 
 // StatusBadge has no dedicated "drift" variant yet; surface drift as a warning
-// for now (the period title still carries the drift meaning).
+// for now (the period title still carries the drift meaning). Note that on the
+// pinned run the API never emits "drift": every day overlapping an active or
+// persistent drift event is also overlapped by an anomaly/critical incident, and
+// critical outranks drift in the ladder.
 function toBadgeStatus(status: TimelineStatus): OperationalStatus {
   return status === "drift" ? "warning" : status;
 }
 
 export default async function TimelinePage() {
-  const timeline = await getTimelineData();
+  const { meta, data: timeline } = await getTimelinePayload();
 
   return (
     <div className="space-y-6">
@@ -24,6 +28,8 @@ export default async function TimelinePage() {
         title="Operational Timeline"
         description="Temporal view of operational behaviour, drift and incident concentration."
       />
+
+      <NoticeStrip notices={meta.notices} />
 
       <SectionCard title="Analysed context">
         <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -70,8 +76,8 @@ export default async function TimelinePage() {
 
       <ChartContainer
         title="Operational behaviour over time"
-        description="Deviation score and incident concentration across the analysed period."
-        footer="Higher deviation scores indicate stronger behavioural deviation from the reference operating pattern."
+        description="Share of production rows carrying anomaly evidence, and incident concentration, across the analysed period."
+        footer="Evidence share is the fraction of a day's scored rows flagged warning or anomaly — a rate, not a model score. A day is marked warning at 5% or more. Recurring-pattern incidents spanning most of the period are excluded from the daily series; they remain in the incident total and in the Incidents view."
       >
         <OperationalTimelineChart data={timeline.series} />
       </ChartContainer>

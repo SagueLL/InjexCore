@@ -2,9 +2,10 @@ import { PageHeader } from "@/components/app/page-header";
 import { ChartContainer } from "@/components/charts/chart-container";
 import { SensorHealthDistributionChart } from "@/components/charts/sensor-health-distribution-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { NoticeStrip } from "@/components/dashboard/notice-strip";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { getSensorHealthData } from "@/lib/dashboard/data-access";
+import { getSensorHealthPayload } from "@/lib/dashboard/data-access";
 
 import type { OperationalStatus } from "@/types/dashboard";
 import type { SensorHealthStatus } from "@/types/sensor-health";
@@ -20,7 +21,7 @@ function humanizeIssueType(issueType: string): string {
 }
 
 export default async function SensorHealthPage() {
-  const sensorHealth = await getSensorHealthData();
+  const { meta, data: sensorHealth } = await getSensorHealthPayload();
 
   return (
     <div className="space-y-6">
@@ -28,6 +29,8 @@ export default async function SensorHealthPage() {
         title="Sensor Health Intelligence"
         description="Signal reliability and data quality overview for the analysed period."
       />
+
+      <NoticeStrip notices={meta.notices} />
 
       <SectionCard
         title="Analysed context"
@@ -78,7 +81,7 @@ export default async function SensorHealthPage() {
       <ChartContainer
         title="Sensor health distribution"
         description="Distribution of analysed signals by reliability status."
-        footer="Critical or warning signals should be reviewed before using them for automated operational decisions."
+        footer="Critical or warning signals should be reviewed before using them for operational decisions."
       >
         <SensorHealthDistributionChart data={sensorHealth.distribution} />
       </ChartContainer>
