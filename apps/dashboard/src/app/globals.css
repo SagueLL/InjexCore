@@ -49,72 +49,96 @@
 }
 
 :root {
+
+  --injex-navy: #111620;
+  --injex-slate: #222d42;
+  --injex-steel: #334464;
+  --injex-green: #59A52C;
+  --injex-green-bright: #6fca3a;
+  --injex-white: #ffffff;
+  --injex-black: #000000;
+
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: var(--injex-navy);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--injex-navy);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --popover-foreground: var(--injex-navy);
+
+  --primary: var(--injex-green);
+  --primary-foreground: var(--injex-white);
+
   --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: var(--injex-slate);
+
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
+
   --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent-foreground: var(--injex-slate);
+
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: var(--injex-green);
+
+  --chart-1: var(--injex-green);
+  --chart-2: var(--injex-steel);
+  --chart-3: #d97706;
+  --chart-4: #dc2626;
+  --chart-5: #6b7280;
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: var(--injex-navy);
+  --sidebar-foreground: var(--injex-white);
+  --sidebar-primary: var(--injex-green);
+  --sidebar-primary-foreground: var(--injex-white);
+  --sidebar-accent: var(--injex-slate);
+  --sidebar-accent-foreground: var(--injex-white);
+  --sidebar-border: color-mix(in srgb, var(--injex-white) 10%, transparent);
+  --sidebar-ring: var(--injex-green);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: var(--injex-navy);
+  --foreground: var(--injex-white);
+  --card: var(--injex-slate);
+  --card-foreground: var(--injex-white);
+  --popover: var(--injex-slate);
+  --popover-foreground: var(--injex-white);
+
+  --primary: var(--injex-green);
+  --primary-foreground: var(--injex-white);
+
+  --secondary: var(--injex-steel);
+  --secondary-foreground: var(--injex-white);
+
+  --muted: var(--injex-slate);
+  --muted-foreground: oklch(0.78 0 0);
+
+  --accent: var(--injex-steel);
+  --accent-foreground: var(--injex-white);
+
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: var(--injex-green);
+
+  --chart-1: var(--injex-green-bright);
+  --chart-2: var(--injex-green);
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #94a3b8;
+
+  --sidebar: var(--injex-navy);
+  --sidebar-foreground: var(--injex-white);
+  --sidebar-primary: var(--injex-green);
+  --sidebar-primary-foreground: var(--injex-white);
+  --sidebar-accent: var(--injex-slate);
+  --sidebar-accent-foreground: var(--injex-white);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--injex-green);
 }
 
 @layer base {

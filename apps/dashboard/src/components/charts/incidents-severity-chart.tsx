@@ -16,6 +16,42 @@ interface IncidentsSeverityChartProps {
   data: IncidentSeverityDistributionItem[];
 }
 
+type BarShapeProps = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: IncidentSeverityDistributionItem;
+};
+
+const severityColors: Record<IncidentSeverityDistributionItem["severity"], string> = {
+  normal: "var(--injex-green)",
+  warning: "#f6bc00",
+  critical: "#f62026",
+};
+
+function IncidentsSeverityBarShape({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  payload,
+}: BarShapeProps) {
+  const fill = payload ? severityColors[payload.severity] : "#64748b";
+
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      rx={6}
+      ry={6}
+      fill={fill}
+    />
+  );
+}
+
 export function IncidentsSeverityChart({ data }: IncidentsSeverityChartProps) {
   if (data.length === 0) {
     return (
@@ -38,12 +74,12 @@ export function IncidentsSeverityChart({ data }: IncidentsSeverityChartProps) {
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12 }}
           />
-          <Tooltip />
+          <Tooltip cursor={{ fill: "rgba(17, 22, 32, 0.04)" }} />
           <Bar
             dataKey="count"
             name="Incidents"
-            fill="var(--primary)"
             radius={[4, 4, 0, 0]}
+            shape={(props) => <IncidentsSeverityBarShape {...props} />}
           />
         </BarChart>
       </ResponsiveContainer>

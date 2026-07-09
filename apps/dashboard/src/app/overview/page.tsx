@@ -3,15 +3,15 @@ import { InsightCard } from "@/components/dashboard/insight-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { demoOverviewSummary } from "@/lib/dashboard/demo-overview";
+import { getOverviewData } from "@/lib/dashboard/data-access";
 
-export default function OverviewPage() {
-  const summary = demoOverviewSummary;
+export default async function OverviewPage() {
+  const summary = await getOverviewData();
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Executive Overview v0"
+        title="Executive Overview"
         description="High-level operational summary of the analysed industrial period."
       />
 
@@ -34,7 +34,7 @@ export default function OverviewPage() {
         </dl>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Operational status</span>
-          <StatusBadge status={summary.operationalStatus} />
+          <StatusBadge className="text-xs" status={summary.operationalStatus} />
         </div>
       </div>
 

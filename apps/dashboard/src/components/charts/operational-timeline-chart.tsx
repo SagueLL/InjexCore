@@ -18,6 +18,19 @@ interface OperationalTimelineChartProps {
   data: TimelinePoint[];
 }
 
+const chartColors = {
+  green: "var(--injex-green)",
+  greenBright: "var(--injex-green-bright)",
+  steel: "var(--injex-steel)",
+  navy: "var(--injex-navy)",
+  warning: "#d97706",
+  critical: "#dc2626",
+  neutral: "#64748b",
+  grid: "#e2e8f0",
+  deviation: "var(--injex-green)",
+  incidents: "#003773",
+}
+
 export function OperationalTimelineChart({
   data,
 }: OperationalTimelineChartProps) {
@@ -25,7 +38,7 @@ export function OperationalTimelineChart({
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
           <XAxis dataKey="date" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
           <YAxis
             yAxisId="deviation"
@@ -42,21 +55,21 @@ export function OperationalTimelineChart({
             tick={{ fontSize: 12 }}
           />
           <Tooltip />
-          <Legend />
+          <Legend/>
           <Bar
             yAxisId="incidents"
             dataKey="incidentCount"
             name="Incident windows"
-            fill="var(--muted-foreground)"
-            fillOpacity={0.25}
-            radius={[2, 2, 0, 0]}
+            fill={chartColors.incidents}
+            fillOpacity={0.5}
+            radius={[6, 6, 0, 0]}
           />
           <Line
             yAxisId="deviation"
             type="monotone"
             dataKey="deviationScore"
             name="Deviation score"
-            stroke="var(--primary)"
+            stroke={chartColors.deviation}
             strokeWidth={2}
             dot={{ r: 3 }}
             activeDot={{ r: 5 }}

@@ -4,7 +4,7 @@ import { OperationalTimelineChart } from "@/components/charts/operational-timeli
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { demoOperationalTimeline } from "@/lib/dashboard/demo-timeline";
+import { getTimelineData } from "@/lib/dashboard/data-access";
 
 import type { OperationalStatus } from "@/types/dashboard";
 import type { TimelineStatus } from "@/types/timeline";
@@ -15,8 +15,8 @@ function toBadgeStatus(status: TimelineStatus): OperationalStatus {
   return status === "drift" ? "warning" : status;
 }
 
-export default function TimelinePage() {
-  const timeline = demoOperationalTimeline;
+export default async function TimelinePage() {
+  const timeline = await getTimelineData();
 
   return (
     <div className="space-y-6">

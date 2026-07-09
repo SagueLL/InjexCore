@@ -20,8 +20,8 @@ export function SectionCard({
   className,
 }: SectionCardProps) {
   return (
-    <Card className={className}>
-      <CardHeader>
+    <Card className="overflow-hidden border-border/80 bg-card shadow-sm">
+      <CardHeader className="border-b border-border/60 pb-4">
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>

@@ -26,6 +26,17 @@ interface StatusBadgeProps {
   className?: string;
 }
 
+const statusStyles = {
+  normal:
+    "border-green-200 bg-green-50 text-green-700",
+  warning:
+    "border-amber-200 bg-amber-50 text-amber-700",
+  critical:
+    "border-red-200 bg-red-50 text-red-700",
+  unknown:
+    "border-slate-200 bg-slate-50 text-slate-600",
+}
+
 export function StatusBadge({
   status,
   size = "sm",
@@ -34,7 +45,7 @@ export function StatusBadge({
   const { label, variant } = STATUS_CONFIG[status];
 
   return (
-    <Badge variant={variant} className={cn(SIZE_CLASSES[size], className)}>
+    <Badge variant={variant} className={cn(SIZE_CLASSES[size], className, statusStyles[status])}>
       {label}
     </Badge>
   );
